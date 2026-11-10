@@ -18,7 +18,7 @@ export function ChecklistReport({ state, reportRef }: ChecklistReportProps) {
   const tableStyle = { '--rating-count': ratingOptions.length } as React.CSSProperties
 
   return (
-    <div className="report-page checklist-report" ref={reportRef} data-testid="evaluation-report">
+    <div className={`report-page checklist-report ${isRoad ? 'checklist-report--road' : 'checklist-report--basic'}`} ref={reportRef} data-testid="evaluation-report">
       <header className="checklist-report-header">
         <div className="checklist-report-header__brand"><TrainingCenterBrand /></div>
         <div className="checklist-report-header__title">
@@ -32,7 +32,7 @@ export function ChecklistReport({ state, reportRef }: ChecklistReportProps) {
       <main className="checklist-report-body">
         <section className="checklist-report-info">
           <ReportInfo label="Họ và tên học viên" value={state.studentName} strong />
-          <ReportInfo label="Hạng xe" value={state.vehicleCategory ? VEHICLE_LABELS[state.vehicleCategory] : '—'} />
+          <ReportInfo label="Hạng xe / Biển số" value={[state.vehicleCategory ? VEHICLE_LABELS[state.vehicleCategory] : '—', state.vehicleNumber].filter(Boolean).join(' · ')} />
           <ReportInfo label="Giáo viên hướng dẫn" value={state.instructorName || '—'} strong />
           <ReportInfo label={isRoad ? 'Ngày học' : 'Ngày đánh giá'} value={formatDate(state.evaluationDate)} />
           <ReportInfo label="Khóa đào tạo" value={state.trainingCourse || '—'} />

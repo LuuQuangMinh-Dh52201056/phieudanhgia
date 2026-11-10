@@ -1,0 +1,10 @@
+/* Sixteen basic items share the same 1080 × 1920 sheet as the eleven-item
+   road form. Keep the existing type sizes and reserve space for the complete
+   teacher comment/signature above the footer, including PNG's flat-color mode.
+   The extra table classes deliberately outrank the older :has() overrides. */
+.report-page.checklist-report.checklist-report--basic
+  .checklist-report-body
+  .checklist-report-table.checklist-report-table--3
+  .checklist-report-table__row {
+  min-height: 51px !important;
+}

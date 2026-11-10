@@ -67,11 +67,11 @@ export function EvaluationPage({ state, onChange, onBack, onPreview }: Evaluatio
 
   return (
     <div className="app-shell evaluation-shell">
-      <AppHeader activeStep={4} />
+      <AppHeader activeStep={5} />
       <main className="content-page evaluation-page">
         <section className="evaluation-intro">
           <div className="page-heading page-heading--light">
-            <div className="page-heading__number">04</div>
+            <div className="page-heading__number">05</div>
             <div>
               <span>HẠNG XE {state.vehicleCategory ? VEHICLE_LABELS[state.vehicleCategory] : ''}</span>
               <h1>Đánh giá từng bài thi</h1>

@@ -1,0 +1,19 @@
+.report-export-fallback {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #c9e2d3;
+  border-radius: 12px;
+  background: #f5fbf7;
+  color: #24583c;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.report-export-fallback p { margin: 6px 0 12px; }
+.report-export-fallback__links { display: flex; flex-wrap: wrap; gap: 10px 20px; }
+.report-export-fallback a { color: #076c37; font-weight: 700; text-decoration: underline; }
+.report-export-fallback details { margin-top: 12px; }
+.report-export-fallback summary { cursor: pointer; font-weight: 600; }
+.report-export-fallback img { display: block; width: 100%; height: auto; margin-top: 12px; }
+.export-message.export-message--error { color: #a1252d; border-color: #e6b7bc; background: #fff4f5; }
+.export-action-bar { flex-wrap: wrap; }

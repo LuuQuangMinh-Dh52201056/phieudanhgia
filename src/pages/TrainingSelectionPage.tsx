@@ -13,11 +13,11 @@ interface TrainingSelectionPageProps {
 export function TrainingSelectionPage({ vehicleCategory, onSelect, onBack }: TrainingSelectionPageProps) {
   return (
     <div className="app-shell training-selection-shell">
-      <AppHeader activeStep={2} />
+      <AppHeader activeStep={3} />
       <main className="content-page training-selection-page">
         <section className="training-selection-hero">
           <div className="page-heading">
-            <div className="page-heading__number">02</div>
+            <div className="page-heading__number">03</div>
             <div>
               <span>HẠNG XE {VEHICLE_LABELS[vehicleCategory]}</span>
               <h1>Chọn nội dung tập</h1>

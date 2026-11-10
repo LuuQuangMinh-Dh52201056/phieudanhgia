@@ -35,6 +35,8 @@ import {
 import {
   VehicleSelectionPage,
 } from './pages/VehicleSelectionPage'
+import { TeacherSelectionPage } from './pages/TeacherSelectionPage'
+import { useTrainingDirectory } from './hooks/useTrainingDirectory'
 
 import AdminTeachersPage
   from './pages/AdminTeachersPage'
@@ -56,6 +58,7 @@ import {
 } from './utils/evaluation'
 
 type AppStep =
+  | 'teacher'
   | 'vehicle'
   | 'training'
   | 'information'
@@ -93,7 +96,7 @@ function createEmptyState(): EvaluationState {
 
     vehicleNumber: '',
 
-    practiceAttempt: '',
+    practiceAttempt: '1',
 
     trainingCourse: '',
 
@@ -220,7 +223,7 @@ export default function App() {
     setStep,
   ] =
     useState<AppStep>(
-      'vehicle',
+      'teacher',
     )
 
   /**
@@ -233,6 +236,31 @@ export default function App() {
     useState<EvaluationState>(
       createEmptyState,
     )
+
+  const directory = useTrainingDirectory()
+  const [selectedTeacherId, setSelectedTeacherId] = useState('')
+  const [selectedVehicleId, setSelectedVehicleId] = useState('')
+  const selectedTeacher = directory.teachers.find((teacher) => teacher.id === selectedTeacherId)
+
+  // Đồng bộ tên/biển số đã được admin sửa trong lúc đang lập phiếu.
+  // Phiếu đã mở ở màn hình báo cáo giữ nguyên nội dung tại thời điểm lưu.
+  useEffect(() => {
+    if (step === 'report') return
+    if (selectedTeacher) {
+      setState((current) => current.instructorName === selectedTeacher.name
+        ? current
+        : { ...current, instructorName: selectedTeacher.name })
+    }
+  }, [selectedTeacher, step])
+
+  useEffect(() => {
+    if (step === 'report' || directory.vehiclesLoading || !selectedVehicleId) return
+    const vehicle = directory.vehicles.find((item) => item.id === selectedVehicleId && item.vehicleCategory === state.vehicleCategory)
+    if (!vehicle) setSelectedVehicleId('')
+    setState((current) => current.vehicleNumber === (vehicle?.plateNumber ?? '')
+      ? current
+      : { ...current, vehicleNumber: vehicle?.plateNumber ?? '' })
+  }, [directory.vehicles, directory.vehiclesLoading, selectedVehicleId, state.vehicleCategory, step])
 
   /**
    * Tránh người dùng nhấn nút
@@ -324,15 +352,36 @@ export default function App() {
   const selectVehicle = (
     category: VehicleCategory,
   ) => {
-    setState({
-      ...createEmptyState(),
+    if (state.vehicleCategory === category) return
+    setSelectedVehicleId('')
+    setState({ ...createEmptyState(), instructorName: selectedTeacher?.name ?? '', vehicleCategory: category })
+  }
 
-      vehicleCategory:
-        category,
-    })
+  const chooseTeacher = (id: string) => {
+    setSelectedTeacherId(id)
+    const teacher = directory.teachers.find((item) => item.id === id)
+    updateState({ instructorName: teacher?.name ?? '' })
+  }
 
-    setStep('training')
+  const continueWithTeacher = () => {
+    if (!selectedTeacher) return
+    updateState({ instructorName: selectedTeacher.name })
+    setStep('vehicle')
+    scrollToTop()
+  }
 
+  const chooseVehicle = (id: string) => {
+    const vehicle = directory.vehicles.find((item) => item.id === id && item.vehicleCategory === state.vehicleCategory)
+    setSelectedVehicleId(vehicle?.id ?? '')
+    updateState({ vehicleNumber: vehicle?.plateNumber ?? '' })
+  }
+
+  const continueToTraining = () => {
+    if (!selectedTeacher) {
+      setStep('teacher')
+    } else if (state.vehicleCategory) {
+      setStep('training')
+    }
     scrollToTop()
   }
 
@@ -346,6 +395,12 @@ export default function App() {
     if (
       !state.vehicleCategory
     ) {
+      return
+    }
+
+    if (state.trainingType === trainingType) {
+      setStep('information')
+      scrollToTop()
       return
     }
 
@@ -409,6 +464,16 @@ export default function App() {
    */
   const continueToEvaluation =
     () => {
+      if (!selectedTeacher) {
+        window.alert('Vui lòng chọn lại giáo viên ở trang đầu.')
+        setStep('teacher')
+        scrollToTop()
+        return
+      }
+      if (!/^(?:[1-9]|10)$/.test(state.practiceAttempt)) {
+        window.alert('Vui lòng chọn lần tập từ 1 đến 10.')
+        return
+      }
       if (
         !state.studentName.trim()
       ) {
@@ -455,6 +520,13 @@ export default function App() {
        * gửi dữ liệu lên Firebase.
        */
       if (isSaving) {
+        return
+      }
+
+      if (!selectedTeacher) {
+        window.alert('Giáo viên đã thay đổi trong danh mục. Vui lòng chọn lại tên giáo viên.')
+        setStep('teacher')
+        scrollToTop()
         return
       }
 
@@ -506,6 +578,8 @@ export default function App() {
       const nextState:
         EvaluationState = {
         ...state,
+        instructorName: selectedTeacher.name,
+        vehicleNumber: directory.vehicles.find((vehicle) => vehicle.id === selectedVehicleId && vehicle.vehicleCategory === state.vehicleCategory)?.plateNumber ?? '',
 
         finalConclusion:
           state.trainingType ===
@@ -593,6 +667,8 @@ export default function App() {
             nextState,
         })
 
+        // Preview dùng đúng snapshot đã lưu, kể cả khi danh mục đổi trong lúc gửi.
+        setState(nextState)
         setStep('report')
 
         scrollToTop()
@@ -647,10 +723,10 @@ export default function App() {
    */
   const newEvaluation = () => {
     setState(
-      createEmptyState(),
+      { ...createEmptyState(), instructorName: selectedTeacher?.name ?? '' },
     )
-
-    setStep('vehicle')
+    setSelectedVehicleId('')
+    setStep(selectedTeacher ? 'vehicle' : 'teacher')
 
     setIsSaving(false)
 
@@ -669,6 +745,18 @@ export default function App() {
     )
   }
 
+  if (step === 'teacher') {
+    return <TeacherSelectionPage
+      teachers={directory.teachers}
+      selectedTeacherId={selectedTeacher?.id ?? ''}
+      loading={directory.teachersLoading}
+      error={directory.teacherError ? 'Không thể tải danh sách giáo viên. Vui lòng thử lại hoặc liên hệ quản trị viên.' : ''}
+      onSelect={chooseTeacher}
+      onContinue={continueWithTeacher}
+      onRetry={directory.refresh}
+    />
+  }
+
   /**
    * Bước 1:
    * Chọn hạng xe.
@@ -678,6 +766,16 @@ export default function App() {
   ) {
     return (
       <VehicleSelectionPage
+        instructorName={selectedTeacher?.name ?? state.instructorName}
+        selectedCategory={state.vehicleCategory}
+        vehicles={directory.vehicles}
+        selectedVehicleId={selectedVehicleId}
+        loadingVehicles={directory.vehiclesLoading}
+        vehiclesError={directory.vehicleError ? 'Không thể tải danh sách xe. Vui lòng thử lại hoặc liên hệ quản trị viên.' : ''}
+        onSelectVehicle={chooseVehicle}
+        onContinue={continueToTraining}
+        onChangeTeacher={() => { setStep('teacher'); scrollToTop() }}
+        onRetry={directory.refresh}
         onSelect={
           selectVehicle
         }
@@ -703,9 +801,7 @@ export default function App() {
           selectTraining
         }
 
-        onBack={
-          newEvaluation
-        }
+        onBack={() => { setStep('vehicle'); scrollToTop() }}
       />
     )
   }
@@ -720,6 +816,7 @@ export default function App() {
     return (
       <StudentInformationPage
         state={state}
+        onChangeSession={() => { setStep('vehicle'); scrollToTop() }}
 
         onChange={
           updateState

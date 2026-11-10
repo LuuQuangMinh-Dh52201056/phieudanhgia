@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { toCanvas } from 'html-to-image'
-import { ArrowLeft, CheckCircle2, Download, FilePenLine, Images, LoaderCircle, RefreshCcw, ScanLine, Share2 } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Download, FilePenLine, Images, LoaderCircle, RefreshCcw, Share2, TriangleAlert } from 'lucide-react'
 import { AppHeader } from '../components/AppHeader'
 import { AppFooter } from '../components/AppFooter'
 import { ChecklistReport } from '../components/ChecklistReport'
@@ -8,6 +8,8 @@ import { EvaluationReport } from '../components/EvaluationReport'
 import { PHU_GIAO_LOGO_DATA_URL } from '../components/TrainingCenterBrand'
 import type { EvaluationState } from '../types/evaluation'
 import { CONCLUSION_META, COURSE_CONCLUSIONS, generateFileName } from '../utils/evaluation'
+import { canSharePng, canvasToPngBlob, describeExportError, getExportPixelRatios } from '../utils/reportExport'
+import '../styles/report-export.css'
 
 interface ReportPreviewPageProps {
   state: EvaluationState
@@ -23,37 +25,47 @@ interface ExportLogoRect {
   height: number
 }
 
-const DESKTOP_EXPORT_SCALE = 2.5
-const MOBILE_EXPORT_SCALE = 2
-const DESKTOP_MAX_CANVAS_PIXELS = 16_000_000
-const MOBILE_MAX_CANVAS_PIXELS = 10_000_000
-const DESKTOP_MAX_CANVAS_SIDE = 8192
-const MOBILE_MAX_CANVAS_SIDE = 4096
-
-function getUltraSharpPixelRatio(width: number, height: number, compactDevice: boolean) {
-  const targetScale = compactDevice ? MOBILE_EXPORT_SCALE : DESKTOP_EXPORT_SCALE
-  const maxPixels = compactDevice ? MOBILE_MAX_CANVAS_PIXELS : DESKTOP_MAX_CANVAS_PIXELS
-  const maxSide = compactDevice ? MOBILE_MAX_CANVAS_SIDE : DESKTOP_MAX_CANVAS_SIDE
-  return Math.max(1, Math.min(
-    targetScale,
-    maxSide / Math.max(width, height),
-    Math.sqrt(maxPixels / (width * height)),
-  ))
-}
-
-function canvasToPngBlob(canvas: HTMLCanvasElement) {
-  return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
+interface PreparedImage {
+  source: EvaluationState
+  url: string
+  file: File | null
+  fileName: string
+  width: number
+  height: number
 }
 
 export function ReportPreviewPage({ state, onChange, onEdit, onNew }: ReportPreviewPageProps) {
   const reportRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
-  const [busy, setBusy] = useState<'download' | 'share' | 'save' | null>(null)
-  const [message, setMessage] = useState('')
-  const isAppleMobile = /iPad|iPhone|iPod/.test(navigator.userAgent)
-    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-  const isCompactDevice = isAppleMobile || window.matchMedia('(max-width: 768px)').matches
+  const mountedRef = useRef(true)
+  const operationRef = useRef(false)
+  const stateRef = useRef(state)
+  stateRef.current = state
+  const [busy, setBusy] = useState<'download' | 'prepare' | 'share' | null>(null)
+  const [notice, setNotice] = useState({ text: '', error: false })
+  const [preparedImage, setPreparedImage] = useState<PreparedImage | null>(null)
+  const prepared = preparedImage?.source === state ? preparedImage : null
+  const supportsShare = typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && typeof File === 'function'
   const isChecklist = state.trainingType === 'BASIC' || state.trainingType === 'ROAD'
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
+
+  useEffect(() => {
+    setPreparedImage(null)
+    setNotice({ text: '', error: false })
+  }, [state])
+
+  useEffect(() => {
+    if (!preparedImage) return
+    return () => {
+      // Keep the URL valid while its links/preview are visible. A grace period
+      // also lets an in-flight download or newly opened image tab finish loading.
+      window.setTimeout(() => URL.revokeObjectURL(preparedImage.url), 60_000)
+    }
+  }, [preparedImage])
 
   useEffect(() => {
     const stage = stageRef.current
@@ -61,210 +73,207 @@ export function ReportPreviewPage({ state, onChange, onEdit, onNew }: ReportPrev
     if (!stage || !report) return
 
     const resize = () => {
-      const scale = Math.min(1, (stage.clientWidth - 2) / 1080)
+      const scale = Math.max(0, Math.min(1, (stage.clientWidth - 2) / 1080))
       stage.style.setProperty('--report-scale', String(scale))
       stage.style.height = `${report.offsetHeight * scale}px`
     }
-    const observer = new ResizeObserver(resize)
-    observer.observe(stage)
-    observer.observe(report)
     resize()
-    return () => observer.disconnect()
+    if (typeof ResizeObserver === 'function') {
+      const observer = new ResizeObserver(resize)
+      observer.observe(stage)
+      observer.observe(report)
+      return () => observer.disconnect()
+    }
+    window.addEventListener('resize', resize)
+    return () => window.removeEventListener('resize', resize)
   }, [state])
 
   const prepareNode = async () => {
     const node = reportRef.current
-    if (!node) throw new Error('Không tìm thấy phiếu đánh giá')
-    await document.fonts.ready
-    const images = Array.from(node.querySelectorAll('img'))
-    await Promise.all(images.map(async (image) => {
+    if (!node) throw new Error('Không tìm thấy phiếu đánh giá.')
+    if (document.fonts) await document.fonts.ready
+    await Promise.all(Array.from(node.querySelectorAll('img')).map(async (image) => {
       if (!image.complete) {
-        await new Promise<void>((resolve) => {
-          image.addEventListener('load', () => resolve(), { once: true })
-          image.addEventListener('error', () => resolve(), { once: true })
+        await new Promise<void>((resolve, reject) => {
+          const finish = () => {
+            window.clearTimeout(timeout)
+            image.removeEventListener('load', finish)
+            image.removeEventListener('error', finish)
+            resolve()
+          }
+          const timeout = window.setTimeout(() => {
+            image.removeEventListener('load', finish)
+            image.removeEventListener('error', finish)
+            reject(new Error('Ảnh trên phiếu chưa tải xong.'))
+          }, 15_000)
+          image.addEventListener('load', finish, { once: true })
+          image.addEventListener('error', finish, { once: true })
         })
       }
-      try {
-        await image.decode?.()
-      } catch {
-        // Vẫn tiếp tục xuất nếu trình duyệt cũ không hỗ trợ decode().
-      }
+      try { await image.decode?.() } catch { /* A failed decode can still be rendered by the browser. */ }
     }))
     const previousStyle = node.getAttribute('style')
-    const alreadyUsedStableExportColors = node.classList.contains('report-export-flat')
+    const hadFlatColors = node.classList.contains('report-export-flat')
     node.classList.add('report-export-flat')
-    Object.assign(node.style, {
-      transform: 'none',
-      position: 'static',
-      left: '0',
-      marginLeft: '0',
-    })
-    // Chờ hai khung hình để WebKit áp dụng trọn bộ màu xuất ổn định trước khi chụp.
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    Object.assign(node.style, { transform: 'none', position: 'static', left: '0', marginLeft: '0' })
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
     return {
       node,
       restore: () => {
-        if (!alreadyUsedStableExportColors) node.classList.remove('report-export-flat')
+        if (!hadFlatColors) node.classList.remove('report-export-flat')
         if (previousStyle === null) node.removeAttribute('style')
         else node.setAttribute('style', previousStyle)
       },
     }
   }
 
-  const renderReportCanvas = async () => {
+  const createImage = async (): Promise<PreparedImage> => {
+    if (prepared) return prepared
     const { node, restore } = await prepareNode()
-    let canvas: HTMLCanvasElement | null = null
-    let logoRects: ExportLogoRect[] = []
+    let result: { blob: Blob; width: number; height: number } | null = null
     try {
+      const width = node.offsetWidth
+      const height = node.offsetHeight
       const reportRect = node.getBoundingClientRect()
-      const pixelRatio = getUltraSharpPixelRatio(node.offsetWidth, node.offsetHeight, isCompactDevice)
-      logoRects = Array.from(node.querySelectorAll<HTMLElement>('[data-export-logo-slot]')).map((slot) => {
+      const logoRects: ExportLogoRect[] = Array.from(node.querySelectorAll<HTMLElement>('[data-export-logo-slot]')).map((slot) => {
         const rect = slot.getBoundingClientRect()
-        return {
-          x: rect.left - reportRect.left,
-          y: rect.top - reportRect.top,
-          width: rect.width,
-          height: rect.height,
-        }
+        return { x: rect.left - reportRect.left, y: rect.top - reportRect.top, width: rect.width, height: rect.height }
       })
-      const renderOptions = {
-        cacheBust: true,
-        backgroundColor: '#f8fbf9',
-        imagePlaceholder: PHU_GIAO_LOGO_DATA_URL,
-        skipAutoScale: true,
+      const logo = new Image()
+      await new Promise<void>((resolve, reject) => {
+        logo.onload = () => resolve()
+        logo.onerror = () => reject(new Error('Không thể nạp logo Phú Giáo.'))
+        logo.src = PHU_GIAO_LOGO_DATA_URL
+      })
+
+      let lastError: unknown
+      for (const pixelRatio of getExportPixelRatios(width, height)) {
+        let canvas: HTMLCanvasElement | null = null
+        try {
+          canvas = await toCanvas(node, {
+            cacheBust: true,
+            backgroundColor: '#f8fbf9',
+            imagePlaceholder: PHU_GIAO_LOGO_DATA_URL,
+            skipAutoScale: true,
+            pixelRatio,
+          })
+          const context = canvas.getContext('2d')
+          if (!context) throw new Error('Trình duyệt không cấp được bộ nhớ dựng ảnh.')
+          context.imageSmoothingEnabled = true
+          context.imageSmoothingQuality = 'high'
+          // foreignObject can omit embedded images in WebKit; finish the logos
+          // directly on the canvas, using the captured unscaled coordinates.
+          logoRects.forEach((rect) => {
+            const x = rect.x * canvas!.width / width
+            const y = rect.y * canvas!.height / height
+            const slotWidth = rect.width * canvas!.width / width
+            const slotHeight = rect.height * canvas!.height / height
+            const imageScale = Math.min(slotWidth / logo.naturalWidth, slotHeight / logo.naturalHeight)
+            const drawWidth = logo.naturalWidth * imageScale
+            const drawHeight = logo.naturalHeight * imageScale
+            context.save()
+            context.beginPath()
+            context.ellipse(x + slotWidth / 2, y + slotHeight / 2, slotWidth / 2, slotHeight / 2, 0, 0, Math.PI * 2)
+            context.clip()
+            context.drawImage(logo, x + (slotWidth - drawWidth) / 2, y + (slotHeight - drawHeight) / 2, drawWidth, drawHeight)
+            context.restore()
+          })
+          result = { blob: await canvasToPngBlob(canvas), width: canvas.width, height: canvas.height }
+          break
+        } catch (error) {
+          lastError = error
+        } finally {
+          if (canvas) { canvas.width = 1; canvas.height = 1 }
+        }
       }
-      try {
-        canvas = await toCanvas(node, { ...renderOptions, pixelRatio })
-      } catch (error) {
-        if (pixelRatio <= 1.5) throw error
-        // Thử lại một lần ở mức tương thích nếu thiết bị thiếu bộ nhớ đồ họa.
-        canvas = await toCanvas(node, { ...renderOptions, pixelRatio: 1.5 })
-      }
+      if (!result) throw lastError ?? new Error('Không thể dựng ảnh phiếu đánh giá.')
     } finally {
       restore()
     }
-    if (!canvas) throw new Error('Không thể dựng ảnh phiếu đánh giá')
-
-    // WebKit đôi khi bỏ ảnh nằm trong SVG foreignObject. Vẽ logo PNG thêm lần
-    // cuối trực tiếp lên canvas để đầu và chân phiếu luôn có logo.
-    const logo = new Image()
-    await new Promise<void>((resolve, reject) => {
-      logo.addEventListener('load', () => resolve(), { once: true })
-      logo.addEventListener('error', () => reject(new Error('Không thể nạp logo Phú Giáo')), { once: true })
-      logo.src = PHU_GIAO_LOGO_DATA_URL
-    })
-    const context = canvas.getContext('2d')
-    if (!context) throw new Error('Không thể hoàn thiện logo trên ảnh')
-    context.imageSmoothingEnabled = true
-    context.imageSmoothingQuality = 'high'
-    const scaleX = canvas.width / node.offsetWidth
-    const scaleY = canvas.height / node.offsetHeight
-    logoRects.forEach((rect) => {
-      const x = rect.x * scaleX
-      const y = rect.y * scaleY
-      const width = rect.width * scaleX
-      const height = rect.height * scaleY
-      const imageScale = Math.min(width / logo.naturalWidth, height / logo.naturalHeight)
-      const drawWidth = logo.naturalWidth * imageScale
-      const drawHeight = logo.naturalHeight * imageScale
-      context.save()
-      context.beginPath()
-      context.ellipse(x + width / 2, y + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2)
-      context.clip()
-      context.drawImage(logo, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight)
-      context.restore()
-    })
-    return canvas
+    if (!mountedRef.current || stateRef.current !== state) throw new Error('Nội dung phiếu đã thay đổi. Vui lòng tạo lại ảnh.')
+    const fileName = generateFileName(state)
+    let file: File | null = null
+    try {
+      if (typeof File === 'function') file = new File([result.blob], fileName, { type: 'image/png' })
+    } catch {
+      // A webview may expose File without supporting its constructor. Sharing
+      // is optional; the PNG Blob must still remain downloadable.
+    }
+    const image: PreparedImage = {
+      source: state,
+      url: URL.createObjectURL(result.blob),
+      file,
+      fileName,
+      width: result.width,
+      height: result.height,
+    }
+    setPreparedImage(image)
+    return image
   }
 
   const downloadImage = async () => {
+    if (operationRef.current) return
+    operationRef.current = true
     setBusy('download')
-    setMessage('')
+    setNotice({ text: '', error: false })
     try {
-      const canvas = await renderReportCanvas()
-      const width = canvas.width
-      const height = canvas.height
-      try {
-        const blob = await canvasToPngBlob(canvas)
-        if (!blob) throw new Error('Không thể tạo tệp ảnh')
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.download = generateFileName(state)
-        link.href = url
-        document.body.appendChild(link)
-        link.click()
-        link.remove()
-        window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-      } finally {
-        // Giải phóng bộ nhớ canvas lớn ngay sau khi đã tạo xong tệp PNG.
-        canvas.width = 1
-        canvas.height = 1
-      }
-      setMessage(`Đã tạo ảnh PNG siêu nét ${width} × ${height}px và bắt đầu tải xuống.`)
-    } catch {
-      setMessage('Chưa thể tạo ảnh. Vui lòng thử lại sau ít giây.')
+      const image = await createImage()
+      const link = document.createElement('a')
+      link.download = image.fileName
+      link.href = image.url
+      document.body.appendChild(link)
+      try { link.click() } finally { link.remove() }
+      setNotice({ text: `Đã tạo PNG ${image.width} × ${image.height}px và gửi yêu cầu tải. Nếu chưa thấy tệp, dùng “Tải lại PNG” hoặc “Mở ảnh để lưu” bên dưới.`, error: false })
+    } catch (error) {
+      if (mountedRef.current) setNotice({ text: describeExportError(error), error: true })
     } finally {
-      setBusy(null)
+      operationRef.current = false
+      if (mountedRef.current) setBusy(null)
     }
   }
 
-  const shareImage = async (intent: 'share' | 'photos' = 'share') => {
-    setBusy(intent === 'photos' ? 'save' : 'share')
-    setMessage('')
-    try {
-      const canvas = await renderReportCanvas()
-      let blob: Blob | null
+  const shareImage = async () => {
+    if (operationRef.current) return
+    operationRef.current = true
+    setNotice({ text: '', error: false })
+    if (!prepared) {
+      setBusy('prepare')
       try {
-        blob = await canvasToPngBlob(canvas)
+        const image = await createImage()
+        setNotice({ text: canSharePng(image.file)
+          ? 'Ảnh đã sẵn sàng. Chạm “Chia sẻ ảnh” để chọn ứng dụng hoặc “Lưu hình ảnh” nếu bảng chia sẻ có lựa chọn này.'
+          : 'Trình duyệt chưa hỗ trợ chia sẻ tệp PNG. Bạn có thể tải PNG hoặc mở ảnh để lưu bằng các liên kết bên dưới.', error: false })
+      } catch (error) {
+        if (mountedRef.current) setNotice({ text: describeExportError(error), error: true })
       } finally {
-        canvas.width = 1
-        canvas.height = 1
+        operationRef.current = false
+        if (mountedRef.current) setBusy(null)
       }
-      if (!blob) throw new Error('Không thể tạo tệp ảnh')
-      const file = new File([blob], generateFileName(state), { type: 'image/png' })
-      if (navigator.share && navigator.canShare?.({ files: [file] })) {
-        if (intent === 'photos') {
-          setMessage('Ảnh siêu nét đã sẵn sàng. Trong bảng chia sẻ iPhone, chạm “Lưu hình ảnh” để đưa ảnh vào ứng dụng Ảnh.')
-          window.setTimeout(() => setBusy(null), 2500)
-        }
-
-        // Safari iOS xử lý ảnh ổn định nhất khi chỉ chia sẻ tệp, không kèm text.
-        const shareData = isAppleMobile
-          ? { files: [file] }
-          : {
-              title: state.trainingType === 'BASIC'
-                ? 'Phiếu đánh giá tập xe cơ bản'
-                : state.trainingType === 'ROAD' ? 'Phiếu đánh giá đường trường' : 'Phiếu đánh giá sa hình',
-              text: `Phiếu đánh giá của ${state.studentName}`,
-              files: [file],
-            }
-        await navigator.share(shareData)
-        setMessage(intent === 'photos'
-          ? 'Nếu bạn đã chọn “Lưu hình ảnh”, phiếu hiện đã nằm trong ứng dụng Ảnh.'
-          : 'Đã mở bảng chia sẻ. Bạn có thể chọn Zalo hoặc ứng dụng mong muốn.')
-      } else {
-        const url = URL.createObjectURL(file)
-        const link = document.createElement('a')
-        link.href = url
-        link.download = file.name
-        document.body.appendChild(link)
-        link.click()
-        link.remove()
-        window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-        setMessage('Thiết bị chưa hỗ trợ chia sẻ trực tiếp; ảnh đã được tải xuống để bạn gửi qua Zalo.')
+      return
+    }
+    setBusy('share')
+    try {
+      if (!canSharePng(prepared.file)) {
+        setNotice({ text: 'Trình duyệt chưa hỗ trợ chia sẻ tệp PNG. Hãy dùng “Tải PNG” hoặc “Mở ảnh để lưu”.', error: false })
+        return
       }
+      // The file was prepared on the previous click. Call share immediately
+      // during this user gesture, without waiting for fonts/canvas/PNG encoding.
+      await navigator.share({ files: [prepared.file!] })
+      if (mountedRef.current) setNotice({ text: 'Đã mở bảng chia sẻ. Hãy hoàn tất thao tác trong ứng dụng hoặc mục lưu ảnh bạn đã chọn.', error: false })
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') setMessage('Đã đóng bảng chia sẻ.')
-      else setMessage('Chưa thể chia sẻ ảnh trên thiết bị này. Bạn có thể dùng nút Lưu Ảnh.')
+      if (mountedRef.current) setNotice({ text: error instanceof Error && error.name === 'AbortError'
+        ? 'Đã đóng bảng chia sẻ. Bạn vẫn có thể tải hoặc mở ảnh để lưu.'
+        : 'Chưa thể chia sẻ tệp. Hãy chạm “Chia sẻ ảnh” để thử lại, hoặc tải PNG/mở ảnh bằng các liên kết bên dưới.', error: !(error instanceof Error && error.name === 'AbortError') })
     } finally {
-      setBusy(null)
+      operationRef.current = false
+      if (mountedRef.current) setBusy(null)
     }
   }
 
   return (
     <div className="app-shell report-preview-page">
-      <AppHeader activeStep={5} />
+      <AppHeader activeStep={6} />
       <main className="report-preview-content">
         <div className="report-preview-heading">
           <div>
@@ -272,7 +281,7 @@ export function ReportPreviewPage({ state, onChange, onEdit, onNew }: ReportPrev
             <h1>Xem trước & xuất ảnh</h1>
             <p>Kiểm tra thông tin, chọn kết luận cuối cùng rồi tải ảnh hoặc chia sẻ.</p>
           </div>
-          <button type="button" onClick={onEdit}><FilePenLine size={18} /> Sửa đánh giá</button>
+          <button type="button" onClick={onEdit} disabled={busy !== null}><FilePenLine size={18} /> Sửa đánh giá</button>
         </div>
 
         {!isChecklist && (
@@ -281,7 +290,7 @@ export function ReportPreviewPage({ state, onChange, onEdit, onNew }: ReportPrev
             <p>Hệ thống đã đề xuất dựa trên kết quả; giáo viên có thể thay đổi trước khi xuất.</p>
             <div className="conclusion-options">
               {COURSE_CONCLUSIONS.map((key) => (
-                <button type="button" key={key} className={state.finalConclusion === key ? 'is-selected' : ''} onClick={() => onChange({ finalConclusion: key })}>
+                <button type="button" key={key} className={state.finalConclusion === key ? 'is-selected' : ''} disabled={busy !== null} onClick={() => onChange({ finalConclusion: key })}>
                   <span>{state.finalConclusion === key && <CheckCircle2 size={17} />}</span>{CONCLUSION_META[key].label}
                 </button>
               ))}
@@ -295,32 +304,36 @@ export function ReportPreviewPage({ state, onChange, onEdit, onNew }: ReportPrev
             : <EvaluationReport state={state} reportRef={reportRef} />}
         </div>
 
-        {isAppleMobile && (
-          <div className="ios-save-guide">
-            <Images size={19} />
-            <span><strong>Lưu trên iPhone:</strong> chạm “Lưu Ảnh”, sau đó chọn “Lưu hình ảnh” trong bảng chia sẻ của iOS.</span>
-          </div>
-        )}
-
         <div className="export-action-bar">
-          <button className="button button--ghost" type="button" onClick={onEdit}><ArrowLeft size={18} /> Sửa đánh giá</button>
-          <button className="button button--outline" type="button" onClick={() => shareImage('share')} disabled={busy !== null}>
-            {busy === 'share' ? <LoaderCircle className="spin" size={19} /> : <Share2 size={19} />} Chia sẻ
+          <button className="button button--ghost" type="button" onClick={onEdit} disabled={busy !== null}><ArrowLeft size={18} /> Sửa đánh giá</button>
+          {supportsShare && (
+            <button className="button button--outline" type="button" data-testid="export-share" onClick={() => void shareImage()} disabled={busy !== null}>
+              {busy === 'share' || busy === 'prepare' ? <LoaderCircle className="spin" size={19} /> : <Share2 size={19} />}
+              {prepared ? 'Chia sẻ ảnh' : 'Chia sẻ / Lưu Ảnh'}
+            </button>
+          )}
+          <button className="button button--primary button--large" type="button" data-testid="export-download" onClick={() => void downloadImage()} disabled={busy !== null}>
+            {busy === 'download' ? <LoaderCircle className="spin" size={19} /> : <Download size={19} />}
+            Tải PNG
           </button>
-          <button
-            className="button button--primary button--large"
-            type="button"
-            onClick={() => isAppleMobile ? shareImage('photos') : downloadImage()}
-            disabled={busy !== null}
-          >
-            {busy === 'download' || busy === 'save'
-              ? <LoaderCircle className="spin" size={19} />
-              : isAppleMobile ? <Images size={19} /> : <Download size={19} />}
-            Lưu Ảnh
-          </button>
-          <button className="button button--danger-ghost" type="button" onClick={onNew}><RefreshCcw size={18} /> Tạo phiếu mới</button>
+          <button className="button button--danger-ghost" type="button" onClick={onNew} disabled={busy !== null}><RefreshCcw size={18} /> Tạo phiếu mới</button>
         </div>
-        {message && <div className="export-message" role="status"><CheckCircle2 size={19} /> {message}</div>}
+        {notice.text && <div className={`export-message ${notice.error ? 'export-message--error' : ''}`} role={notice.error ? 'alert' : 'status'}>{notice.error ? <TriangleAlert size={19} /> : <CheckCircle2 size={19} />} {notice.text}</div>}
+
+        {prepared && (
+          <section className="report-export-fallback" data-testid="export-fallback" aria-label="Lưu ảnh PNG đã tạo">
+            <strong><Images size={17} aria-hidden="true" /> PNG đã sẵn sàng · {prepared.width} × {prepared.height}px</strong>
+            <p>Nếu trình duyệt trong ứng dụng chưa tải tệp, hãy mở ảnh rồi nhấn giữ/chọn lưu. Bạn cũng có thể mở trang này bằng trình duyệt ngoài ứng dụng để tải lại.</p>
+            <div className="report-export-fallback__links">
+              <a href={prepared.url} download={prepared.fileName} data-testid="export-download-link">Tải lại PNG</a>
+              <a href={prepared.url} target="_blank" rel="noopener noreferrer" data-testid="export-open-image">Mở ảnh để lưu</a>
+            </div>
+            <details>
+              <summary>Xem ảnh để lưu thủ công</summary>
+              <img src={prepared.url} alt={`Phiếu đánh giá của ${state.studentName}; nhấn giữ hoặc mở menu ảnh để lưu`} />
+            </details>
+          </section>
+        )}
       </main>
       <AppFooter />
     </div>

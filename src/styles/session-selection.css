@@ -1,0 +1,21 @@
+.teacher-entry-content { width: min(100% - 32px, 680px); padding-bottom: 56px; }
+.teacher-entry-card { display: grid; gap: 22px; padding: 32px; border: 1px solid #d3e5db; border-radius: 22px; background: #fff; box-shadow: 0 16px 42px #154c2a0d; }
+.teacher-entry-icon { width: 66px; height: 66px; display: grid; place-items: center; color: #087a3e; background: #eaf6ef; border-radius: 18px; }
+.teacher-entry-hint { margin: 0; color: #526c5e; font-size: 14px; line-height: 1.7; }
+.session-select { display: block; width: 100%; min-height: 52px; max-width: 100%; padding: 12px 36px 12px 14px; border: 1px solid #c9dfd0; border-radius: 11px; color: #173c29; background-color: #fcfefd; font: inherit; font-size: 16px; cursor: pointer; }
+.session-select:focus-visible { border-color: #087a3e; outline: 3px solid #087a3e22; outline-offset: 1px; }
+.session-select:disabled { cursor: wait; color: #6c7d72; background-color: #f1f5f2; }
+.session-readonly { min-height: 50px; display: flex; align-items: center; padding: 11px 15px; border: 1px solid #d3e2d8; border-radius: 11px; background: #f1f7f3; color: #24533a; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.session-notice { margin: 0; padding: 13px 16px; border: 1px solid #d5e5db; border-radius: 12px; color: #486957; background: #f4f9f6; font-size: 14px; line-height: 1.7; }
+.session-notice p { margin: 0; }
+.session-notice--error { border-color: #efb9b9; background: #fff5f5; color: #a02525; }
+.session-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-top: 24px; }
+.vehicle-entry-options { display: grid; gap: 14px; padding: 22px; margin-top: 22px; border: 1px solid #cce5d4; border-radius: 16px; background: #f4faf6; }
+.vehicle-entry-options .field > span small { font-weight: 400; }
+.vehicle-page .vehicle-card.vehicle-card--selected { border-color: #079147 !important; box-shadow: 0 0 0 3px #087a3e25 !important; }
+.session-change-link { padding: 0; border: 0; background: transparent; color: #087a3e; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+@media (max-width: 600px) {
+  .teacher-entry-card { padding: 22px 18px; gap: 18px; }
+  .vehicle-entry-options { padding: 18px 14px; }
+  .session-actions > .button { flex: 1 1 140px; }
+}

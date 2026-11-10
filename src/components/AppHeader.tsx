@@ -5,7 +5,7 @@ interface AppHeaderProps {
   activeStep: number
 }
 
-const steps = ['Chọn hạng', 'Nội dung', 'Thông tin', 'Đánh giá', 'Xem phiếu']
+const steps = ['Giáo viên', 'Chọn hạng', 'Nội dung', 'Thông tin', 'Đánh giá', 'Xem phiếu']
 
 export function AppHeader({ activeStep }: AppHeaderProps) {
   return (
@@ -15,7 +15,7 @@ export function AppHeader({ activeStep }: AppHeaderProps) {
           <TrainingCenterBrand compact />
           <div className="app-privacy"><ShieldCheck size={17} /> Bảo mật thông tin học viên</div>
         </div>
-        <div className="stepper" aria-label={`Bước ${activeStep} trên 5`}>
+        <div className="stepper" aria-label={`Bước ${activeStep} trên ${steps.length}`}>
           {steps.map((step, index) => {
             const number = index + 1
             const done = number < activeStep

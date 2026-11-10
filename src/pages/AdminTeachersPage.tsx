@@ -6,6 +6,7 @@ import {
 } from 'react'
 
 import html2canvas from 'html2canvas'
+import { AdminTrainingDirectory } from '../components/AdminTrainingDirectory'
 
 import {
   ReportPreviewPage,
@@ -1923,6 +1924,7 @@ export default function AdminTeachersPage() {
       </section>
 
       <section className="admin-pro-content">
+        <AdminTrainingDirectory />
         {recordsError ? (
           <div className="admin-pro-error-banner">
             {recordsError}

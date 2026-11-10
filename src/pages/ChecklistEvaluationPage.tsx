@@ -75,11 +75,11 @@ export function ChecklistEvaluationPage({ state, onChange, onBack, onPreview }: 
 
   return (
     <div className="app-shell checklist-shell">
-      <AppHeader activeStep={4} />
+      <AppHeader activeStep={5} />
       <main className="content-page checklist-page">
         <section className="checklist-intro">
           <div className="page-heading page-heading--light">
-            <div className="page-heading__number">04</div>
+            <div className="page-heading__number">05</div>
             <div>
               <span>HẠNG XE {state.vehicleCategory ? VEHICLE_LABELS[state.vehicleCategory] : ''}</span>
               <h1>{isRoad ? 'Phiếu đánh giá đường trường' : 'Phiếu đánh giá buổi học cơ bản'}</h1>

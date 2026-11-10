@@ -10,9 +10,10 @@ interface StudentInformationPageProps {
   onChange: (updates: Partial<EvaluationState>) => void
   onBack: () => void
   onContinue: () => void
+  onChangeSession: () => void
 }
 
-export function StudentInformationPage({ state, onChange, onBack, onContinue }: StudentInformationPageProps) {
+export function StudentInformationPage({ state, onChange, onBack, onContinue, onChangeSession }: StudentInformationPageProps) {
   const trainingLabel = state.trainingType === 'BASIC' ? 'TẬP CƠ BẢN' : state.trainingType === 'ROAD' ? 'ĐƯỜNG TRƯỜNG' : 'SA HÌNH'
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
@@ -21,10 +22,10 @@ export function StudentInformationPage({ state, onChange, onBack, onContinue }: 
 
   return (
     <div className="app-shell">
-      <AppHeader activeStep={3} />
+      <AppHeader activeStep={4} />
       <main className="content-page content-page--narrow">
         <div className="page-heading">
-          <div className="page-heading__number">03</div>
+          <div className="page-heading__number">04</div>
           <div>
             <span>THÔNG TIN BUỔI ĐÁNH GIÁ</span>
             <h1>Thông tin học viên</h1>
@@ -61,19 +62,21 @@ export function StudentInformationPage({ state, onChange, onBack, onContinue }: 
               </div>
             </label>
 
-            <label className="field">
+            <div className="field">
               <span><GraduationCap size={17} /> Giáo viên hướng dẫn</span>
-              <input value={state.instructorName} onChange={(event) => onChange({ instructorName: event.target.value })} placeholder="Họ tên giáo viên" aria-label="Giáo viên hướng dẫn" />
-            </label>
+              <div className="session-readonly" aria-label="Giáo viên đã chọn">{state.instructorName || 'Chưa chọn giáo viên'}</div>
+            </div>
 
-            <label className="field">
+            <div className="field">
               <span><CarFront size={17} /> Số xe</span>
-              <input value={state.vehicleNumber} onChange={(event) => onChange({ vehicleNumber: event.target.value })} placeholder="Ví dụ: 51H-123.45" aria-label="Số xe" />
-            </label>
+              <div className="session-readonly" aria-label="Biển số xe đã chọn">{state.vehicleNumber || 'Chưa chọn xe'}</div>
+            </div>
 
             <label className="field">
               <span><Hash size={17} /> Lần tập thứ</span>
-              <input type="number" min="1" max="999" inputMode="numeric" value={state.practiceAttempt} onChange={(event) => onChange({ practiceAttempt: event.target.value })} placeholder="Ví dụ: 07" aria-label="Lần tập thứ" />
+              <select className="session-select" required value={state.practiceAttempt} onChange={(event) => onChange({ practiceAttempt: event.target.value })} aria-label="Lần tập thứ">
+                {Array.from({ length: 10 }, (_, index) => String(index + 1)).map((attempt) => <option value={attempt} key={attempt}>Lần {attempt}</option>)}
+              </select>
             </label>
 
             <label className="field">
@@ -84,7 +87,7 @@ export function StudentInformationPage({ state, onChange, onBack, onContinue }: 
 
           <div className="form-note">
             <ShieldNotice />
-            <p><strong>Bảo mật:</strong> Thông tin học viên chỉ được sử dụng để tạo phiếu trong phiên hiện tại.</p>
+            <p>Tên giáo viên và biển số xe đã được chọn ở bước đầu. <button className="session-change-link" type="button" onClick={onChangeSession}>Đổi giáo viên / xe</button><br />Phiếu được lưu tại trung tâm khi bạn bấm xem phiếu đánh giá.</p>
           </div>
 
           <div className="form-actions">

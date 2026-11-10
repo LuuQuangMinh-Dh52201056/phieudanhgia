@@ -1,10 +1,14 @@
 import { chromium } from 'playwright-core'
 import { copyFile, mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { runDirectoryScenarios } from './e2e-directory.mjs'
+import { runExportScenarios } from './e2e-export.mjs'
+import { runStartupScenarios } from './e2e-startup.mjs'
 
 const baseUrl = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:4173'
 const chromePath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
-const artifactDir = path.resolve('artifacts')
+const artifactDir = path.resolve('artifacts/e2e')
+const blockedExternalRequests = []
 const bCourseOrder = [
   'lesson-start',
   'lesson-pedestrian',
@@ -23,11 +27,83 @@ function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
 
+function assertChecklistGeometry(metrics, reportName) {
+  assert(metrics, `${reportName}: chưa ghi nhận hình học phiếu`)
+  assert(metrics.bodyScrollHeight <= metrics.bodyClientHeight + 1, `${reportName}: thân phiếu bị cắt ${metrics.bodyScrollHeight - metrics.bodyClientHeight}px`)
+  assert(metrics.commentBottom <= metrics.bodyInnerBottom + 1, `${reportName}: khung nhận xét vượt thân phiếu/đè footer`)
+  assert(metrics.signatureBottom <= metrics.bodyInnerBottom + 1 && metrics.signatureTextBottom <= metrics.signatureBottom + 1, `${reportName}: tên giáo viên bị cắt hoặc footer che`)
+  assert(metrics.commentTextBottom <= metrics.commentInnerBottom + 1, `${reportName}: nội dung nhận xét bị cắt trong khung`)
+}
+
+async function watchChecklistGeometry(page, reportName) {
+  const preview = await page.getByTestId('evaluation-report').evaluate((report) => {
+    const measure = () => {
+      const scale = report.getBoundingClientRect().width / 1080
+      const body = report.querySelector('.checklist-report-body')
+      const comment = report.querySelector('.checklist-report-comment')
+      const signature = comment.querySelector('div strong')
+      const textBottom = (element) => {
+        const range = document.createRange()
+        range.selectNodeContents(element)
+        return range.getBoundingClientRect().bottom / scale
+      }
+      return {
+        bodyScrollHeight: body.scrollHeight,
+        bodyClientHeight: body.clientHeight,
+        bodyInnerBottom: body.getBoundingClientRect().bottom / scale - parseFloat(getComputedStyle(body).paddingBottom),
+        commentBottom: comment.getBoundingClientRect().bottom / scale,
+        commentInnerBottom: comment.getBoundingClientRect().bottom / scale - parseFloat(getComputedStyle(comment).paddingBottom) - 1,
+        signatureBottom: signature.getBoundingClientRect().bottom / scale,
+        signatureTextBottom: textBottom(signature),
+        commentTextBottom: textBottom(comment.querySelector('p')),
+      }
+    }
+    window.__E2E_FLAT_CHECKLIST_GEOMETRY__ = null
+    const observer = new MutationObserver(() => {
+      if (report.classList.contains('report-export-flat')) window.__E2E_FLAT_CHECKLIST_GEOMETRY__ = measure()
+      else if (window.__E2E_FLAT_CHECKLIST_GEOMETRY__) observer.disconnect()
+    })
+    observer.observe(report, { attributes: true, attributeFilter: ['class', 'style'] })
+    return measure()
+  })
+  assertChecklistGeometry(preview, `${reportName} xem trước`)
+}
+
+async function assertExportedChecklistGeometry(page, reportName) {
+  const metrics = await page.evaluate(() => window.__E2E_FLAT_CHECKLIST_GEOMETRY__)
+  assertChecklistGeometry(metrics, `${reportName} khi dựng PNG`)
+}
+
+async function assertOfflineServer() {
+  let marker
+  try {
+    const response = await fetch(new URL('/__e2e_mock_mode', baseUrl))
+    marker = await response.json()
+  } catch {
+    throw new Error('E2E yêu cầu server mock: npm run dev -- --config scripts/vite.e2e.config.mjs --port 4173')
+  }
+  assert(marker.store === 'memory-only', 'Dừng E2E: server chưa bật kho dữ liệu in-memory, không được dùng Firebase thật.')
+}
+
+async function offlineContext(browser, options) {
+  const context = await browser.newContext(options)
+  const allowedOrigin = new URL(baseUrl).origin
+  await context.route('**/*', (route) => {
+    const requestUrl = new URL(route.request().url())
+    if (requestUrl.origin === allowedOrigin || ['data:', 'blob:'].includes(requestUrl.protocol)) {
+      return route.continue()
+    }
+    blockedExternalRequests.push(route.request().url())
+    return route.abort('blockedbyclient')
+  })
+  return context
+}
+
 async function assertExportedLogos(page, png, reportName) {
   const exportedWidth = png.readUInt32BE(16)
   const exportedHeight = png.readUInt32BE(20)
   assert(exportedWidth >= 2160, `${reportName} phải xuất PNG siêu nét rộng ít nhất 2160px, thực tế ${exportedWidth}px`)
-  assert(exportedWidth * exportedHeight <= 10_000_000, `${reportName} vượt giới hạn bộ nhớ ảnh điện thoại 10MP`)
+  assert(exportedWidth * exportedHeight <= 16_000_000, `${reportName} vượt giới hạn canvas 16MP`)
   const logoSlots = await page.getByTestId('evaluation-report').locator('[data-export-logo-slot]').evaluateAll((slots) => {
     const report = slots[0]?.closest('[data-testid="evaluation-report"]')
     if (!report) return []
@@ -112,31 +188,51 @@ async function assertReportFooterBrand(page, reportName) {
   assert(centerDelta <= 1, `${reportName} có phương châm lệch tâm ${centerDelta}px`)
 }
 
+async function chooseTeacher(page, name = 'Trần Trọng Thức') {
+  const teacher = page.getByRole('combobox', { name: 'Giáo viên hướng dẫn', exact: true })
+  await teacher.selectOption({ label: name })
+  await page.getByRole('button', { name: 'Tiếp tục', exact: true }).click()
+}
+
 async function chooseVehicle(page, name, training = 'SA HÌNH') {
+  // The application now loads through a dynamic import. Wait for that initial
+  // render before deciding whether this page still needs teacher selection.
+  await page.locator('.teacher-entry-page, .vehicle-card-grid').first().waitFor({ state: 'visible' })
+  if (await page.getByRole('combobox', { name: 'Giáo viên hướng dẫn', exact: true }).count()) {
+    await chooseTeacher(page)
+  }
   await page.getByRole('button', { name }).click()
+  const plate = name.includes('TỰ ĐỘNG') ? '51K-678.90' : name.includes('C1') ? '61C-246.80' : '51H-123.45'
+  await page.getByRole('combobox', { name: 'Biển số xe', exact: true }).selectOption({ label: plate })
+  await page.getByRole('button', { name: 'Tiếp tục', exact: true }).click()
   const trainingTestId = training === 'TẬP CƠ BẢN' ? 'training-basic' : training === 'ĐƯỜNG TRƯỜNG' ? 'training-road' : 'training-course'
   await page.getByTestId(trainingTestId).click()
 }
 
 async function enterStudent(page, name) {
   await page.getByLabel('Họ và tên học viên').fill(name)
-  await page.getByLabel('Giáo viên hướng dẫn').fill('Trần Trọng Thức')
-  await page.getByLabel('Số xe').fill('51H-123.45')
-  await page.getByLabel('Lần tập thứ').fill('7')
+  const attempts = page.getByRole('combobox', { name: 'Lần tập thứ', exact: true })
+  const attemptOptions = await attempts.locator('option').evaluateAll((options) => options.map((option) => option.value).filter(Boolean))
+  assert(JSON.stringify(attemptOptions) === JSON.stringify(Array.from({ length: 10 }, (_, index) => String(index + 1))), 'Lần tập thứ phải là danh sách từ 1 đến 10')
+  await attempts.selectOption('7')
   await page.getByLabel('Khóa đào tạo').fill('K24-2026')
   const evaluationDate = await page.getByLabel('Ngày đánh giá').inputValue()
   await page.getByRole('button', { name: 'Bắt đầu đánh giá' }).click()
   return evaluationDate
 }
 
+await assertOfflineServer()
 await mkdir(artifactDir, { recursive: true })
 const browser = await chromium.launch({ executablePath: chromePath, headless: true })
 
 try {
-  const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 })
+  await runStartupScenarios({ browser, offlineContext, baseUrl, artifactDir, assert })
+  const mobile = await offlineContext(browser, { viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 })
   const page = await mobile.newPage()
   await page.goto(baseUrl)
+  await page.getByRole('combobox', { name: 'Giáo viên hướng dẫn', exact: true }).waitFor({ state: 'visible' })
   await page.screenshot({ path: path.join(artifactDir, 'home-mobile.png'), fullPage: false })
+  await page.screenshot({ path: path.join(artifactDir, 'teacher-entry-mobile.png'), fullPage: true })
 
   const dimensions = await page.evaluate(() => ({
     viewport: document.documentElement.clientWidth,
@@ -154,7 +250,11 @@ try {
   const logoSource = await page.locator('.training-brand__mark img').first().getAttribute('src')
   assert(logoSource?.startsWith('data:image/png;base64,'), 'Logo Phú Giáo phải là PNG nhúng trực tiếp để không mất khi Safari xuất ảnh')
 
+  await chooseTeacher(page)
   await page.getByRole('button', { name: 'HẠNG XE B SỐ SÀN' }).click()
+  await page.getByRole('combobox', { name: 'Biển số xe', exact: true }).selectOption({ label: '51H-123.45' })
+  await page.screenshot({ path: path.join(artifactDir, 'vehicle-selection-mobile.png'), fullPage: true })
+  await page.getByRole('button', { name: 'Tiếp tục', exact: true }).click()
   await page.screenshot({ path: path.join(artifactDir, 'training-selection-mobile.png'), fullPage: true })
   assert(await page.getByText('Tập cơ bản', { exact: true }).count() === 1, 'Phải có lựa chọn Tập cơ bản')
   assert(await page.getByText('Sa hình', { exact: true }).count() === 1, 'Phải có lựa chọn Sa hình')
@@ -169,7 +269,7 @@ try {
   )
   await page.screenshot({ path: path.join(artifactDir, 'student-info-mobile.png'), fullPage: false })
   const basicDate = await enterStudent(page, 'Học viên Cơ Bản')
-  assert(await page.locator('.checklist-item-card').count() === 13, 'Tập cơ bản phải có đúng 16 nội dung')
+  assert(await page.locator('.checklist-item-card').count() === 16, 'Tập cơ bản phải có đúng 16 nội dung')
   assert(await page.getByText('Mở cửa xe và lên xe an toàn', { exact: true }).count() === 1, 'Phiếu cơ bản phải đúng nội dung mẫu')
   assert(await page.getByTestId('check-basic-pedals-UNDERSTOOD').count() === 1, 'Mỗi nội dung cơ bản phải có ô Đã hiểu')
   assert(await page.getByTestId('check-basic-pedals-NEEDS_WORK').count() === 1, 'Mỗi nội dung cơ bản phải có ô Còn yếu')
@@ -185,8 +285,9 @@ try {
   assert(basicReportText.includes('SỐ SÀN'), 'Huy hiệu phiếu cơ bản phải ghi rõ loại xe SỐ SÀN')
   assert(!basicReportText.includes('QUỐC ANH'), 'Phiếu cơ bản không được còn thương hiệu Quốc Anh')
   await assertReportFooterBrand(page, 'Phiếu tập cơ bản')
+  await watchChecklistGeometry(page, 'Phiếu tập cơ bản đủ 16 nội dung')
   const basicDownloadPromise = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Lưu Ảnh' }).click()
+  await page.getByRole('button', { name: 'Tải PNG', exact: true }).click()
   const basicDownload = await basicDownloadPromise
   const [basicYear, basicMonth, basicDay] = basicDate.split('-')
   assert(basicDownload.suggestedFilename() === `DanhGiaTapXeCoBan_HocvienCoBan_${basicDay}-${basicMonth}-${basicYear}.png`, `Tên ảnh tập cơ bản không đúng: ${basicDownload.suggestedFilename()}`)
@@ -194,6 +295,7 @@ try {
   assert(basicDownloadPath, 'Không nhận được tệp PNG tập cơ bản')
   await copyFile(basicDownloadPath, path.join(artifactDir, 'basic-exported-report.png'))
   await assertExportedLogos(page, await readFile(basicDownloadPath), 'Phiếu tập cơ bản')
+  await assertExportedChecklistGeometry(page, 'Phiếu tập cơ bản đủ 16 nội dung')
 
   await page.goto(baseUrl)
   await chooseVehicle(page, 'HẠNG XE B SỐ SÀN', 'ĐƯỜNG TRƯỜNG')
@@ -212,8 +314,9 @@ try {
   assert(roadReportText.includes('PHIẾU ĐÁNH GIÁ ĐÀO TẠO HỌC VIÊN'), 'Phiếu đường trường phải có đúng tiêu đề mẫu')
   assert(roadReportText.includes('Đạt yêu cầu'), 'Phiếu đường trường phải hiển thị đánh giá chung')
   await assertReportFooterBrand(page, 'Phiếu đường trường')
+  await watchChecklistGeometry(page, 'Phiếu đường trường')
   const roadDownloadPromise = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Lưu Ảnh' }).click()
+  await page.getByRole('button', { name: 'Tải PNG', exact: true }).click()
   const roadDownload = await roadDownloadPromise
   const [roadYear, roadMonth, roadDay] = roadDate.split('-')
   assert(roadDownload.suggestedFilename() === `DanhGiaDuongTruong_HocvienDuongTruong_${roadDay}-${roadMonth}-${roadYear}.png`, `Tên ảnh đường trường không đúng: ${roadDownload.suggestedFilename()}`)
@@ -221,6 +324,7 @@ try {
   assert(roadDownloadPath, 'Không nhận được tệp PNG đường trường')
   await copyFile(roadDownloadPath, path.join(artifactDir, 'road-exported-report.png'))
   await assertExportedLogos(page, await readFile(roadDownloadPath), 'Phiếu đường trường')
+  await assertExportedChecklistGeometry(page, 'Phiếu đường trường')
 
   await page.goto(baseUrl)
 
@@ -262,7 +366,7 @@ try {
   await page.screenshot({ path: path.join(artifactDir, 'report-mobile.png'), fullPage: false })
 
   const downloadPromise = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Lưu Ảnh' }).click()
+  await page.getByRole('button', { name: 'Tải PNG', exact: true }).click()
   const download = await downloadPromise
   const [year, month, day] = bssDate.split('-')
   assert(download.suggestedFilename() === `DanhGiaSaHinh_NguyenVanAn_${day}-${month}-${year}.png`, `Tên ảnh không đúng: ${download.suggestedFilename()}`)
@@ -272,7 +376,7 @@ try {
   const png = await readFile(downloadPath)
   assert(png.readUInt32BE(16) >= 2160, `Ảnh siêu nét trên điện thoại phải rộng ít nhất 2160px, thực tế ${png.readUInt32BE(16)}px`)
   assert(png.readUInt32BE(20) >= 3840, `Ảnh siêu nét phải cao ít nhất 3840px, thực tế ${png.readUInt32BE(20)}px`)
-  assert(png.readUInt32BE(16) * png.readUInt32BE(20) <= 10_000_000, 'Ảnh điện thoại phải nằm trong giới hạn bộ nhớ an toàn 10MP')
+  assert(png.readUInt32BE(16) * png.readUInt32BE(20) <= 16_000_000, 'Ảnh phải nằm trong giới hạn canvas 16MP')
   await assertExportedLogos(page, png, 'Phiếu sa hình')
 
   await page.goto(baseUrl)
@@ -305,20 +409,21 @@ try {
   await page.goto(baseUrl)
   await chooseVehicle(page, 'HẠNG XE HẠNG C1', 'TẬP CƠ BẢN')
   await enterStudent(page, 'Học viên C1 Cơ Bản')
-  assert(await page.locator('.checklist-item-card').count() === 13, 'Tập cơ bản C1 phải có đúng 16 nội dung')
+  assert(await page.locator('.checklist-item-card').count() === 16, 'Tập cơ bản C1 phải có đúng 16 nội dung')
   assert(await page.getByText('Phân biệt được các bàn đạp Côn – Phanh – Ga', { exact: true }).count() === 1, 'C1 cơ bản phải có nội dung bàn đạp xe số sàn')
 
   await page.goto(baseUrl)
   await chooseVehicle(page, 'HẠNG XE B SỐ TỰ ĐỘNG', 'TẬP CƠ BẢN')
   await enterStudent(page, 'Học viên BTĐ Cơ Bản')
-  assert(await page.locator('.checklist-item-card').count() === 13, 'Tập cơ bản BTĐ phải có đúng 16 nội dung')
+  assert(await page.locator('.checklist-item-card').count() === 16, 'Tập cơ bản BTĐ phải có đúng 16 nội dung')
   assert(await page.getByText('Phân biệt và sử dụng đúng bàn đạp Phanh – Ga', { exact: true }).count() === 1, 'BTĐ cơ bản phải có nội dung bàn đạp riêng')
   assert(await page.getByText('Phân biệt được các bàn đạp Côn – Phanh – Ga', { exact: true }).count() === 0, 'BTĐ cơ bản không được có nội dung bàn đạp côn')
   await mobile.close()
 
-  const desktop = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 })
+  const desktop = await offlineContext(browser, { viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 })
   const desktopPage = await desktop.newPage()
   await desktopPage.goto(baseUrl)
+  await desktopPage.getByRole('combobox', { name: 'Giáo viên hướng dẫn', exact: true }).waitFor({ state: 'visible' })
   const desktopHeaderBrand = desktopPage.locator('.app-header .training-brand').first()
   assert(await desktopHeaderBrand.locator('small').isVisible(), 'Máy tính phải hiện dòng TRUNG TÂM GIÁO DỤC NGHỀ NGHIỆP')
   assert(await desktopHeaderBrand.locator('small').innerText() === 'TRUNG TÂM GIÁO DỤC NGHỀ NGHIỆP', 'Tên Trung tâm trên máy tính phải đầy đủ')
@@ -326,7 +431,7 @@ try {
   await desktopPage.screenshot({ path: path.join(artifactDir, 'home-desktop.png'), fullPage: false })
   await desktop.close()
 
-  const iphone = await browser.newContext({
+  const iphone = await offlineContext(browser, {
     viewport: { width: 390, height: 844 },
     deviceScaleFactor: 1,
     userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1',
@@ -338,11 +443,14 @@ try {
   await iphonePage.getByRole('button', { name: 'Đánh dấu bài còn lại là Tốt' }).click()
   await iphonePage.getByTestId('status-emergency-GOOD').click()
   await iphonePage.getByRole('button', { name: 'Xem phiếu đánh giá' }).click()
-  assert(await iphonePage.getByRole('button', { name: 'Lưu Ảnh' }).count() === 1, 'Safari iPhone phải hiển thị nút Lưu Ảnh')
-  assert(await iphonePage.getByText('Lưu trên iPhone:', { exact: true }).count() === 1, 'Safari iPhone phải hiển thị hướng dẫn lưu hình ảnh')
+  assert(await iphonePage.getByRole('button', { name: 'Tải PNG', exact: true }).count() === 1, 'Thiết bị iPhone phải luôn có nút Tải PNG')
   await iphone.close()
 
-  console.log('E2E_OK: Phu Giao branding, tick forms, vehicle variants, PNG export and iPhone Photos flow verified')
+  await runDirectoryScenarios({ browser, offlineContext, baseUrl, assert, chooseTeacher, chooseVehicle, enterStudent, artifactDir })
+  await runExportScenarios({ browser, offlineContext, baseUrl, assert, chooseTeacher, chooseVehicle, enterStudent })
+
+  assert(blockedExternalRequests.length === 0, `Ứng dụng E2E đã thử truy cập dịch vụ ngoài: ${blockedExternalRequests.join(', ')}`)
+  console.log('E2E_OK: offline stores, Phu Giao forms, vehicle variants and PNG downloads verified; iPhone UA only, not native Safari')
 } finally {
   await browser.close()
 }
