@@ -87,7 +87,7 @@ export function StudentInformationPage({ state, onChange, onBack, onContinue, on
 
           <div className="form-note">
             <ShieldNotice />
-            <p>Tên giáo viên và biển số xe đã được chọn ở bước đầu. <button className="session-change-link" type="button" onClick={onChangeSession}>Đổi giáo viên / xe</button><br />Phiếu được lưu tại trung tâm khi bạn bấm xem phiếu đánh giá.</p>
+            <p>Tên giáo viên và biển số xe đã được chọn ở bước đầu. <button className="session-change-link" type="button" onClick={onChangeSession}>Đổi giáo viên / xe</button><br />Bạn có thể kiểm tra nội dung trước khi xác nhận lưu phiếu tại trung tâm.</p>
           </div>
 
           <div className="form-actions">

@@ -55,7 +55,7 @@ export function ChecklistEvaluationPage({ state, onChange, onBack, onPreview }: 
   const addComment = (comment: string) => {
     if (state.teacherComment.includes(comment)) return
     const separator = state.teacherComment.trim() ? ' • ' : ''
-    onChange({ teacherComment: `${state.teacherComment.trim()}${separator}${comment}` })
+    onChange({ teacherComment: `${state.teacherComment.trim()}${separator}${comment}`.slice(0, 500) })
   }
 
   const validate = () => {

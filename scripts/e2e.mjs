@@ -4,6 +4,8 @@ import path from 'node:path'
 import { runDirectoryScenarios } from './e2e-directory.mjs'
 import { runExportScenarios } from './e2e-export.mjs'
 import { runStartupScenarios } from './e2e-startup.mjs'
+import { runAdminAuthScenarios } from './e2e-admin-auth.mjs'
+import { runAdminDataScenarios } from './e2e-admin-data.mjs'
 
 const baseUrl = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:4173'
 const chromePath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
@@ -227,12 +229,19 @@ const browser = await chromium.launch({ executablePath: chromePath, headless: tr
 
 try {
   await runStartupScenarios({ browser, offlineContext, baseUrl, artifactDir, assert })
+  await runAdminAuthScenarios({ browser, offlineContext, baseUrl, artifactDir, assert })
+  console.log('E2E_AUTH_OK: startup recovery, authorized login and sign-out isolation')
+  await runAdminDataScenarios({ browser, offlineContext, baseUrl, artifactDir, assert })
+  console.log('E2E_ADMIN_DATA_OK: groups, filters, CSV, details, edit and delete recovery')
   const mobile = await offlineContext(browser, { viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 })
   const page = await mobile.newPage()
   await page.goto(baseUrl)
   await page.getByRole('combobox', { name: 'Giáo viên hướng dẫn', exact: true }).waitFor({ state: 'visible' })
   await page.screenshot({ path: path.join(artifactDir, 'home-mobile.png'), fullPage: false })
   await page.screenshot({ path: path.join(artifactDir, 'teacher-entry-mobile.png'), fullPage: true })
+  await page.setViewportSize({ width: 320, height: 844 })
+  await page.screenshot({ path: path.join(artifactDir, 'teacher-entry-320.png'), fullPage: true })
+  await page.setViewportSize({ width: 390, height: 844 })
 
   const dimensions = await page.evaluate(() => ({
     viewport: document.documentElement.clientWidth,
@@ -254,6 +263,9 @@ try {
   await page.getByRole('button', { name: 'HẠNG XE B SỐ SÀN' }).click()
   await page.getByRole('combobox', { name: 'Biển số xe', exact: true }).selectOption({ label: '51H-123.45' })
   await page.screenshot({ path: path.join(artifactDir, 'vehicle-selection-mobile.png'), fullPage: true })
+  await page.setViewportSize({ width: 320, height: 844 })
+  await page.screenshot({ path: path.join(artifactDir, 'vehicle-selection-320.png'), fullPage: true })
+  await page.setViewportSize({ width: 390, height: 844 })
   await page.getByRole('button', { name: 'Tiếp tục', exact: true }).click()
   await page.screenshot({ path: path.join(artifactDir, 'training-selection-mobile.png'), fullPage: true })
   assert(await page.getByText('Tập cơ bản', { exact: true }).count() === 1, 'Phải có lựa chọn Tập cơ bản')
@@ -286,6 +298,7 @@ try {
   assert(!basicReportText.includes('QUỐC ANH'), 'Phiếu cơ bản không được còn thương hiệu Quốc Anh')
   await assertReportFooterBrand(page, 'Phiếu tập cơ bản')
   await watchChecklistGeometry(page, 'Phiếu tập cơ bản đủ 16 nội dung')
+  await page.getByTestId('save-evaluation').click()
   const basicDownloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Tải PNG', exact: true }).click()
   const basicDownload = await basicDownloadPromise
@@ -315,6 +328,7 @@ try {
   assert(roadReportText.includes('Đạt yêu cầu'), 'Phiếu đường trường phải hiển thị đánh giá chung')
   await assertReportFooterBrand(page, 'Phiếu đường trường')
   await watchChecklistGeometry(page, 'Phiếu đường trường')
+  await page.getByTestId('save-evaluation').click()
   const roadDownloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Tải PNG', exact: true }).click()
   const roadDownload = await roadDownloadPromise
@@ -365,6 +379,7 @@ try {
   }
   await page.screenshot({ path: path.join(artifactDir, 'report-mobile.png'), fullPage: false })
 
+  await page.getByTestId('save-evaluation').click()
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Tải PNG', exact: true }).click()
   const download = await downloadPromise
@@ -436,6 +451,12 @@ try {
     deviceScaleFactor: 1,
     userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1',
   })
+  await iphone.addInitScript(() => {
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: ({ files }) => files?.[0]?.type === 'image/png' })
+    Object.defineProperty(navigator, 'share', { configurable: true, value: async ({ files }) => {
+      window.__E2E_IPHONE_SHARE__ = { type: files[0].type, size: files[0].size, active: navigator.userActivation.isActive }
+    } })
+  })
   const iphonePage = await iphone.newPage()
   await iphonePage.goto(baseUrl)
   await chooseVehicle(iphonePage, 'HẠNG XE B SỐ SÀN')
@@ -443,14 +464,21 @@ try {
   await iphonePage.getByRole('button', { name: 'Đánh dấu bài còn lại là Tốt' }).click()
   await iphonePage.getByTestId('status-emergency-GOOD').click()
   await iphonePage.getByRole('button', { name: 'Xem phiếu đánh giá' }).click()
+  await iphonePage.getByTestId('save-evaluation').click()
+  await iphonePage.getByRole('heading', { name: 'Phiếu đánh giá đã lưu' }).waitFor()
+  assert(await iphonePage.getByTestId('export-share').count() === 1, 'iPhone cần có thao tác lưu ảnh riêng')
   assert(await iphonePage.getByRole('button', { name: 'Tải PNG', exact: true }).count() === 1, 'Thiết bị iPhone phải luôn có nút Tải PNG')
+  await iphonePage.getByRole('button', { name: 'Lưu vào Ảnh', exact: true }).click()
+  const iphoneShare = await iphonePage.evaluate(() => window.__E2E_IPHONE_SHARE__)
+  assert(iphoneShare?.active && iphoneShare.type === 'image/png' && iphoneShare.size > 0, 'iPhone phải gửi PNG từ thao tác lưu ảnh của người dùng')
+  await iphonePage.screenshot({ path: path.join(artifactDir, 'gallery-iphone-390.png'), fullPage: false })
   await iphone.close()
 
   await runDirectoryScenarios({ browser, offlineContext, baseUrl, assert, chooseTeacher, chooseVehicle, enterStudent, artifactDir })
   await runExportScenarios({ browser, offlineContext, baseUrl, assert, chooseTeacher, chooseVehicle, enterStudent })
 
   assert(blockedExternalRequests.length === 0, `Ứng dụng E2E đã thử truy cập dịch vụ ngoài: ${blockedExternalRequests.join(', ')}`)
-  console.log('E2E_OK: offline stores, Phu Giao forms, vehicle variants and PNG downloads verified; iPhone UA only, not native Safari')
+  console.log('E2E_OK: startup/auth, admin CRUD, forms, PNG, simulated Android and iPhone sharing; offline stores only')
 } finally {
   await browser.close()
 }

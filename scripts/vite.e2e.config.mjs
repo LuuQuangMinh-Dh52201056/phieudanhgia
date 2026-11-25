@@ -32,6 +32,10 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: /^(?:\.\.\/|\.\/)services\/adminAuthStore$/,
+        replacement: mockFile('adminAuthStore'),
+      },
+      {
         find: /^(?:\.\.\/|\.\/)services\/trainingDirectoryStore$/,
         replacement: mockFile('trainingDirectoryStore'),
       },

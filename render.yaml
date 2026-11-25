@@ -4,6 +4,11 @@ services:
     runtime: static
     buildCommand: npm ci && npm run build
     staticPublishPath: ./dist
+    envVars:
+      - key: VITE_FIREBASE_PROJECT_ID
+        value: webdanhgia-3417e
+      - key: VITE_FIREBASE_ADMIN_UIDS
+        value: 4aEUDPqy7sa5biKeBUO9KjiCtvo1
 
     routes:
       - type: rewrite

@@ -1,0 +1,110 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isTrainingAdmin() {
+      // Firebase Authentication users authorized to administer webdanhgia-3417e.
+      let adminUids = ['4aEUDPqy7sa5biKeBUO9KjiCtvo1'];
+      // A copied placeholder must never grant access, even to a matching UID.
+      return request.auth != null
+        && !adminUids.hasAny(['REPLACE_WITH_ADMIN_UID'])
+        && request.auth.uid in adminUids;
+    }
+
+    function validTeacherFields(data) {
+      return data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 120
+        && data.normalizedName is string
+        && data.normalizedName.size() > 0
+        && data.normalizedName.size() <= 120;
+    }
+
+    function validVehicleFields(data) {
+      return data.plateNumber is string
+        && data.plateNumber.size() > 0
+        && data.plateNumber.size() <= 32
+        && data.normalizedPlate is string
+        && data.normalizedPlate.size() > 0
+        && data.normalizedPlate.size() <= 32
+        && data.normalizedPlate.matches('[A-Z0-9]+')
+        && data.vehicleCategory in ['B_MANUAL', 'B_AUTOMATIC', 'C1'];
+    }
+
+    function validEvaluationEdit(data) {
+      return data.teacherName is string && data.teacherName.size() > 0 && data.teacherName.size() <= 120
+        && data.studentName is string && data.studentName.size() > 0 && data.studentName.size() <= 160
+        && data.evaluationDate is string && data.evaluationDate.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && data.practiceAttempt is string && data.practiceAttempt.matches('([1-9]|10)?')
+        && data.vehicleNumber is string && data.vehicleNumber.size() <= 32
+        && data.trainingCourse is string && data.trainingCourse.size() <= 120
+        && data.teacherComment is string && data.teacherComment.size() <= 500
+        && (data.overallResult == null || (data.overallResult is string && data.overallResult.size() <= 120))
+        && (data.get('evaluationData', null) == null || data.evaluationData is map)
+        && data.updatedAt == request.time
+        && data.updatedBy == request.auth.uid;
+    }
+
+    match /trainingTeachers/{teacherId} {
+      // Teachers choose their names without signing in.
+      allow read: if true;
+      allow create: if isTrainingAdmin()
+        && request.resource.data.keys().hasOnly(['name', 'normalizedName', 'createdAt', 'updatedAt'])
+        && validTeacherFields(request.resource.data)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isTrainingAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'normalizedName', 'updatedAt'])
+        && validTeacherFields(request.resource.data)
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isTrainingAdmin();
+    }
+
+    match /trainingVehicles/{vehicleId} {
+      allow read: if true;
+      allow create: if isTrainingAdmin()
+        && request.resource.data.keys().hasOnly(['plateNumber', 'normalizedPlate', 'vehicleCategory', 'createdAt', 'updatedAt'])
+        && validVehicleFields(request.resource.data)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isTrainingAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['plateNumber', 'normalizedPlate', 'vehicleCategory', 'updatedAt'])
+        && validVehicleFields(request.resource.data)
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isTrainingAdmin();
+    }
+
+    // Anonymous teachers create new records. Student records are private to admins.
+    match /evaluations/{evaluationId} {
+      /* Cho phép website tạo phiếu mới mà không cần đăng nhập. */
+      allow create: if
+        request.resource.data.teacherName is string
+        && request.resource.data.teacherName.size() > 0
+        && request.resource.data.studentName is string
+        && request.resource.data.studentName.size() > 0
+        && request.resource.data.trainingType is string
+        && request.resource.data.vehicleCategory is string
+        && request.resource.data.vehicleCategory.size() > 0
+        && request.resource.data.evaluationDate is string
+        && !request.resource.data.keys().hasAny(['updatedBy'])
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      /* Chỉ tài khoản quản trị được đọc danh sách và chi tiết phiếu. */
+      allow read: if isTrainingAdmin();
+      /* Quản trị được sửa nội dung với mã người sửa và thời gian do Firebase xác thực. */
+      allow update: if isTrainingAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'teacherName', 'studentName', 'evaluationDate', 'practiceAttempt', 'vehicleNumber',
+          'trainingCourse', 'teacherComment', 'overallResult', 'evaluationData', 'updatedAt', 'updatedBy'
+        ])
+        && validEvaluationEdit(request.resource.data);
+      /* Chỉ tài khoản quản trị được xóa phiếu. */
+      allow delete: if isTrainingAdmin();
+    }
+
+    /* Khóa toàn bộ collection khác. */
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

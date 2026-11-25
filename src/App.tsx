@@ -1,931 +1,229 @@
-import {
-  useEffect,
-  useState,
-} from 'react'
-
-import {
-  createChecklistItems,
-} from './data/checklistConfigs'
-
-import {
-  createEmergencyEvaluation,
-  createLessonEvaluations,
-} from './data/lessonConfigs'
-
-import {
-  ChecklistEvaluationPage,
-} from './pages/ChecklistEvaluationPage'
-
-import {
-  EvaluationPage,
-} from './pages/EvaluationPage'
-
-import {
-  ReportPreviewPage,
-} from './pages/ReportPreviewPage'
-
-import {
-  StudentInformationPage,
-} from './pages/StudentInformationPage'
-
-import {
-  TrainingSelectionPage,
-} from './pages/TrainingSelectionPage'
-
-import {
-  VehicleSelectionPage,
-} from './pages/VehicleSelectionPage'
+﻿import { useEffect, useRef, useState } from 'react'
+import { LoaderCircle, X } from 'lucide-react'
+import { createChecklistItems } from './data/checklistConfigs'
+import { createEmergencyEvaluation, createLessonEvaluations } from './data/lessonConfigs'
+import { AdminAuthGate } from './components/AdminAuthGate'
+import AdminTeachersPage from './pages/AdminTeachersPage'
 import { TeacherSelectionPage } from './pages/TeacherSelectionPage'
+import { VehicleSelectionPage } from './pages/VehicleSelectionPage'
+import { TrainingSelectionPage } from './pages/TrainingSelectionPage'
+import { StudentInformationPage } from './pages/StudentInformationPage'
+import { EvaluationPage } from './pages/EvaluationPage'
+import { ChecklistEvaluationPage } from './pages/ChecklistEvaluationPage'
+import { ReportPreviewPage } from './pages/ReportPreviewPage'
 import { useTrainingDirectory } from './hooks/useTrainingDirectory'
+import { saveEvaluationAdminRecord, type SaveEvaluationAdminInput } from './services/evaluationAdminStore'
+import { getBackendErrorCode } from './services/firestoreOperations'
+import type { EvaluationState, TrainingType, VehicleCategory } from './types/evaluation'
+import { calculateConclusion, getTodayInputValue } from './utils/evaluation'
 
-import AdminTeachersPage
-  from './pages/AdminTeachersPage'
+type Step = 'teacher' | 'vehicle' | 'training' | 'information' | 'evaluation' | 'report'
 
-import {
-  saveEvaluationAdminRecord,
-  type AdminTrainingType,
-} from './services/evaluationAdminStore'
-
-import type {
-  EvaluationState,
-  TrainingType,
-  VehicleCategory,
-} from './types/evaluation'
-
-import {
-  calculateConclusion,
-  getTodayInputValue,
-} from './utils/evaluation'
-
-type AppStep =
-  | 'teacher'
-  | 'vehicle'
-  | 'training'
-  | 'information'
-  | 'evaluation'
-  | 'report'
-
-/**
- * Đường dẫn quản trị hiện tại.
- *
- * Local:
- * http://localhost:5173/admin/giaovien/A@7979
- *
- * Render:
- * https://ten-web.onrender.com/admin/giaovien/A@7979
- */
-const ADMIN_PATH =
-  '/admin/giaovien/A@7979'
-
-/**
- * Tạo trạng thái ban đầu
- * cho một phiếu đánh giá mới.
- */
-function createEmptyState(): EvaluationState {
+function emptyEvaluation(): EvaluationState {
   return {
-    vehicleCategory: null,
-
-    trainingType: null,
-
-    studentName: '',
-
-    evaluationDate:
-      getTodayInputValue(),
-
-    instructorName: '',
-
-    vehicleNumber: '',
-
-    practiceAttempt: '1',
-
-    trainingCourse: '',
-
-    lessons: [],
-
-    emergencyEvaluation: null,
-
-    checklistItems: [],
-
-    checklistOverall: null,
-
-    teacherComment: '',
-
-    finalConclusion: null,
+    vehicleCategory: null, trainingType: null, studentName: '', evaluationDate: getTodayInputValue(),
+    instructorName: '', vehicleNumber: '', practiceAttempt: '1', trainingCourse: '',
+    lessons: [], emergencyEvaluation: null, checklistItems: [], checklistOverall: null,
+    teacherComment: '', finalConclusion: null,
   }
 }
 
-/**
- * Xóa dấu / ở cuối đường dẫn.
- *
- * Ví dụ:
- *
- * /admin/giaovien/A@7979/
- *
- * được chuyển thành:
- *
- * /admin/giaovien/A@7979
- */
-function normalizePathname(
-  pathname: string,
-): string {
-  const normalized =
-    pathname.replace(
-      /\/+$/,
-      '',
-    )
-
-  return normalized || '/'
-}
-
-/**
- * Kiểm tra đường dẫn hiện tại
- * có phải trang admin hay không.
- *
- * Có hỗ trợ trường hợp trình duyệt
- * mã hóa ký tự @ thành %40.
- */
-function isAdminPath(
-  pathname: string,
-): boolean {
-  let decodedPathname =
-    pathname
-
-  try {
-    decodedPathname =
-      decodeURIComponent(
-        pathname,
-      )
-  } catch {
-    decodedPathname =
-      pathname
-  }
-
-  return (
-    normalizePathname(
-      decodedPathname,
-    ) === ADMIN_PATH
-  )
-}
-
-/**
- * Chuyển loại nội dung tập
- * sang loại dữ liệu admin.
- *
- * COURSE:
- * Phiếu sát hạch sa hình.
- *
- * EXAM:
- * Tên loại lưu trên Firebase.
- */
-function mapTrainingTypeForAdmin(
-  trainingType: TrainingType,
-): AdminTrainingType {
-  if (
-    trainingType === 'COURSE'
-  ) {
-    return 'EXAM'
-  }
-
-  return trainingType
-}
-
-/**
- * Lấy kết quả chung
- * của toàn bộ phiếu.
- */
-function getOverallResult(
-  state: EvaluationState,
-): string | null {
-  if (
-    state.trainingType ===
-    'COURSE'
-  ) {
-    return state.finalConclusion
-      ? String(
-          state.finalConclusion,
-        )
-      : null
-  }
-
-  return state.checklistOverall
-    ? String(
-        state.checklistOverall,
-      )
-    : null
+function isAdminPath(): boolean {
+  let pathname = window.location.pathname
+  try { pathname = decodeURIComponent(pathname) } catch { /* Keep a malformed path out of admin. */ }
+  return ['/admin', '/admin/giaovien/A@7979'].includes(pathname.replace(/\/+$/, ''))
 }
 
 export default function App() {
-  /**
-   * Bước hiện tại của quy trình.
-   */
-  const [
-    step,
-    setStep,
-  ] =
-    useState<AppStep>(
-      'teacher',
-    )
+  const [admin, setAdmin] = useState(isAdminPath)
+  useEffect(() => {
+    const update = () => setAdmin(isAdminPath())
+    window.addEventListener('popstate', update)
+    return () => window.removeEventListener('popstate', update)
+  }, [])
+  return admin ? <AdminAuthGate><AdminTeachersPage /></AdminAuthGate> : <EvaluationWorkflow />
+}
 
-  /**
-   * Toàn bộ dữ liệu phiếu.
-   */
-  const [
-    state,
-    setState,
-  ] =
-    useState<EvaluationState>(
-      createEmptyState,
-    )
-
+function EvaluationWorkflow() {
   const directory = useTrainingDirectory()
-  const [selectedTeacherId, setSelectedTeacherId] = useState('')
-  const [selectedVehicleId, setSelectedVehicleId] = useState('')
-  const selectedTeacher = directory.teachers.find((teacher) => teacher.id === selectedTeacherId)
+  const [step, setStep] = useState<Step>('teacher')
+  const [state, setState] = useState<EvaluationState>(emptyEvaluation)
+  const [teacherId, setTeacherId] = useState('')
+  const [vehicleId, setVehicleId] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false)
+  const [error, setError] = useState('')
+  const savingRef = useRef(false)
+  const pendingSave = useRef<SaveEvaluationAdminInput | null>(null)
+  const mountedRef = useRef(true)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const teacher = directory.teachers.find((item) => item.id === teacherId)
+  const vehicle = directory.vehicles.find((item) => item.id === vehicleId && item.vehicleCategory === state.vehicleCategory)
 
-  // Đồng bộ tên/biển số đã được admin sửa trong lúc đang lập phiếu.
-  // Phiếu đã mở ở màn hình báo cáo giữ nguyên nội dung tại thời điểm lưu.
   useEffect(() => {
-    if (step === 'report') return
-    if (selectedTeacher) {
-      setState((current) => current.instructorName === selectedTeacher.name
-        ? current
-        : { ...current, instructorName: selectedTeacher.name })
-    }
-  }, [selectedTeacher, step])
-
-  useEffect(() => {
-    if (step === 'report' || directory.vehiclesLoading || !selectedVehicleId) return
-    const vehicle = directory.vehicles.find((item) => item.id === selectedVehicleId && item.vehicleCategory === state.vehicleCategory)
-    if (!vehicle) setSelectedVehicleId('')
-    setState((current) => current.vehicleNumber === (vehicle?.plateNumber ?? '')
-      ? current
-      : { ...current, vehicleNumber: vehicle?.plateNumber ?? '' })
-  }, [directory.vehicles, directory.vehiclesLoading, selectedVehicleId, state.vehicleCategory, step])
-
-  /**
-   * Tránh người dùng nhấn nút
-   * xem phiếu nhiều lần liên tục,
-   * làm tạo nhiều document Firebase.
-   */
-  const [
-    isSaving,
-    setIsSaving,
-  ] = useState(false)
-
-  /**
-   * Kiểm tra URL ban đầu
-   * có phải trang admin.
-   */
-  const [
-    showAdmin,
-    setShowAdmin,
-  ] =
-    useState<boolean>(() => {
-      if (
-        typeof window ===
-        'undefined'
-      ) {
-        return false
-      }
-
-      return isAdminPath(
-        window.location.pathname,
-      )
-    })
-
-  /**
-   * Theo dõi nút quay lại
-   * và tiến tới của trình duyệt.
-   */
-  useEffect(() => {
-    const handlePopState =
-      () => {
-        setShowAdmin(
-          isAdminPath(
-            window.location.pathname,
-          ),
-        )
-      }
-
-    window.addEventListener(
-      'popstate',
-      handlePopState,
-    )
-
-    return () => {
-      window.removeEventListener(
-        'popstate',
-        handlePopState,
-      )
-    }
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
   }, [])
 
-  /**
-   * Cập nhật một phần dữ liệu phiếu.
-   */
-  const updateState = (
-    updates:
-      Partial<EvaluationState>,
-  ) => {
-    setState(
-      (current) => ({
-        ...current,
-        ...updates,
-      }),
-    )
+  useEffect(() => {
+    if (contentRef.current) contentRef.current.inert = saving
+  }, [saving])
+
+  useEffect(() => {
+    if (saving || step === 'report' || !teacher) return
+    setState((current) => current.instructorName === teacher.name ? current : { ...current, instructorName: teacher.name })
+  }, [teacher, saving, step])
+
+  useEffect(() => {
+    if (saving || step === 'report' || directory.vehiclesLoading || !vehicleId) return
+    if (!vehicle) setVehicleId('')
+    setState((current) => current.vehicleNumber === (vehicle?.plateNumber ?? '') ? current : { ...current, vehicleNumber: vehicle?.plateNumber ?? '' })
+  }, [vehicle, vehicleId, directory.vehiclesLoading, saving, step])
+
+  const go = (next: Step) => {
+    if (savingRef.current) return
+    setStep(next)
+    setError('')
+    window.scrollTo({ top: 0, behavior: 'instant' })
   }
 
-  /**
-   * Cuộn về đầu trang.
-   */
-  const scrollToTop = () => {
-    window.scrollTo({
-      top: 0,
-      behavior: 'auto',
-    })
-  }
-
-  /**
-   * Bước 1:
-   * Chọn hạng xe.
-   */
-  const selectVehicle = (
-    category: VehicleCategory,
-  ) => {
-    if (state.vehicleCategory === category) return
-    setSelectedVehicleId('')
-    setState({ ...createEmptyState(), instructorName: selectedTeacher?.name ?? '', vehicleCategory: category })
+  const update = (updates: Partial<EvaluationState>) => {
+    if (savingRef.current) return
+    setState((current) => ({ ...current, ...updates, ...(updates.lessons ? { finalConclusion: null } : {}) }))
+    setError('')
   }
 
   const chooseTeacher = (id: string) => {
-    setSelectedTeacherId(id)
-    const teacher = directory.teachers.find((item) => item.id === id)
-    updateState({ instructorName: teacher?.name ?? '' })
+    setTeacherId(id)
+    update({ instructorName: directory.teachers.find((item) => item.id === id)?.name ?? '' })
   }
 
-  const continueWithTeacher = () => {
-    if (!selectedTeacher) return
-    updateState({ instructorName: selectedTeacher.name })
-    setStep('vehicle')
-    scrollToTop()
+  const chooseCategory = (category: VehicleCategory) => {
+    if (state.vehicleCategory === category) return
+    setVehicleId('')
+    setState({ ...emptyEvaluation(), vehicleCategory: category, instructorName: teacher?.name ?? '' })
+    setError('')
   }
 
   const chooseVehicle = (id: string) => {
-    const vehicle = directory.vehicles.find((item) => item.id === id && item.vehicleCategory === state.vehicleCategory)
-    setSelectedVehicleId(vehicle?.id ?? '')
-    updateState({ vehicleNumber: vehicle?.plateNumber ?? '' })
+    const selected = directory.vehicles.find((item) => item.id === id && item.vehicleCategory === state.vehicleCategory)
+    setVehicleId(selected?.id ?? '')
+    update({ vehicleNumber: selected?.plateNumber ?? '' })
   }
 
-  const continueToTraining = () => {
-    if (!selectedTeacher) {
-      setStep('teacher')
-    } else if (state.vehicleCategory) {
-      setStep('training')
-    }
-    scrollToTop()
-  }
-
-  /**
-   * Bước 2:
-   * Chọn loại nội dung tập.
-   */
-  const selectTraining = (
-    trainingType: TrainingType,
-  ) => {
-    if (
-      !state.vehicleCategory
-    ) {
-      return
-    }
-
-    if (state.trainingType === trainingType) {
-      setStep('information')
-      scrollToTop()
-      return
-    }
-
-    setState(
-      (current) => ({
-        ...current,
-
+  const chooseTraining = (trainingType: TrainingType) => {
+    if (!state.vehicleCategory) return
+    if (state.trainingType !== trainingType) {
+      update({
         trainingType,
-
-        /**
-         * Phiếu sát hạch sa hình.
-         */
-        lessons:
-          trainingType ===
-          'COURSE'
-            ? createLessonEvaluations(
-                current
-                  .vehicleCategory!,
-              )
-            : [],
-
-        emergencyEvaluation:
-          trainingType ===
-          'COURSE'
-            ? createEmergencyEvaluation()
-            : null,
-
-        /**
-         * Phiếu làm quen xe cơ bản
-         * hoặc phiếu đường trường.
-         */
-        checklistItems:
-          trainingType ===
-          'COURSE'
-            ? []
-            : createChecklistItems(
-                trainingType,
-
-                current
-                  .vehicleCategory!,
-              ),
-
-        checklistOverall:
-          null,
-
-        teacherComment: '',
-
-        finalConclusion: null,
-      }),
-    )
-
-    setStep('information')
-
-    scrollToTop()
+        lessons: trainingType === 'COURSE' ? createLessonEvaluations(state.vehicleCategory) : [],
+        emergencyEvaluation: trainingType === 'COURSE' ? createEmergencyEvaluation() : null,
+        checklistItems: trainingType === 'COURSE' ? [] : createChecklistItems(trainingType, state.vehicleCategory),
+        checklistOverall: null, teacherComment: '', finalConclusion: null,
+      })
+    }
+    go('information')
   }
 
-  /**
-   * Bước 3:
-   * Kiểm tra thông tin học viên
-   * và giáo viên.
-   */
-  const continueToEvaluation =
-    () => {
-      if (!selectedTeacher) {
-        window.alert('Vui lòng chọn lại giáo viên ở trang đầu.')
-        setStep('teacher')
-        scrollToTop()
-        return
-      }
-      if (!/^(?:[1-9]|10)$/.test(state.practiceAttempt)) {
-        window.alert('Vui lòng chọn lần tập từ 1 đến 10.')
-        return
-      }
-      if (
-        !state.studentName.trim()
-      ) {
-        window.alert(
-          'Vui lòng nhập họ và tên học viên.',
-        )
-
-        return
-      }
-
-      if (
-        !state.instructorName.trim()
-      ) {
-        window.alert(
-          'Vui lòng nhập tên giáo viên hướng dẫn.',
-        )
-
-        return
-      }
-
-      if (
-        !state.evaluationDate
-      ) {
-        window.alert(
-          'Vui lòng chọn ngày đánh giá.',
-        )
-
-        return
-      }
-
-      setStep('evaluation')
-
-      scrollToTop()
+  const validateInformation = (): boolean => {
+    if (!teacher) {
+      go('teacher')
+      setError('Giáo viên đã thay đổi trong danh mục. Vui lòng chọn lại tên giáo viên.')
+      return false
     }
+    if (!state.studentName.trim()) { setError('Vui lòng nhập họ và tên học viên.'); return false }
+    if (!state.evaluationDate) { setError('Vui lòng chọn ngày đánh giá.'); return false }
+    if (!/^(?:[1-9]|10)$/.test(state.practiceAttempt)) { setError('Vui lòng chọn lần tập từ 1 đến 10.'); return false }
+    return true
+  }
 
-  /**
-   * Lưu toàn bộ phiếu lên Firebase
-   * rồi mở trang xem phiếu.
-   */
-  const openReport =
-    async () => {
-      /**
-       * Ngăn lưu trùng khi đang
-       * gửi dữ liệu lên Firebase.
-       */
-      if (isSaving) {
-        return
+  const openReport = () => {
+    if (savingRef.current || !validateInformation() || !state.vehicleCategory || !state.trainingType || !teacher) return
+    setState({
+      ...state,
+      studentName: state.studentName.trim().replace(/\s+/g, ' '), instructorName: teacher.name,
+      vehicleNumber: vehicle?.plateNumber ?? '',
+      trainingCourse: state.trainingCourse.trim().replace(/\s+/g, ' '),
+      teacherComment: state.teacherComment.trim(),
+      finalConclusion: state.trainingType === 'COURSE' ? state.finalConclusion ?? calculateConclusion(state.lessons) : null,
+    })
+    go('report')
+  }
+
+  const saveReport = async () => {
+    if (savingRef.current || saved || !state.vehicleCategory || !state.trainingType) return
+    if (!pendingSave.current && !validateInformation()) return
+    const input = pendingSave.current ?? {
+      teacherName: state.instructorName, studentName: state.studentName,
+      trainingType: state.trainingType === 'COURSE' ? 'EXAM' : state.trainingType,
+      vehicleCategory: state.vehicleCategory, vehicleNumber: state.vehicleNumber,
+      evaluationDate: state.evaluationDate, practiceAttempt: state.practiceAttempt,
+      trainingCourse: state.trainingCourse, teacherComment: state.teacherComment,
+      overallResult: state.trainingType === 'COURSE' ? state.finalConclusion : state.checklistOverall,
+      evaluationData: state,
+    } satisfies SaveEvaluationAdminInput
+    pendingSave.current = input
+    savingRef.current = true
+    setSaving(true)
+    setError('')
+    try {
+      await saveEvaluationAdminRecord(input)
+      pendingSave.current = null
+      if (mountedRef.current) {
+        setAwaitingConfirmation(false)
+        setSaved(true)
+        window.scrollTo({ top: 0, behavior: 'instant' })
       }
-
-      if (!selectedTeacher) {
-        window.alert('Giáo viên đã thay đổi trong danh mục. Vui lòng chọn lại tên giáo viên.')
-        setStep('teacher')
-        scrollToTop()
-        return
+    } catch (cause) {
+      const uncertain = getBackendErrorCode(cause) === 'deadline-exceeded'
+        || (awaitingConfirmation && getBackendErrorCode(cause) === 'unavailable')
+      if (!uncertain) pendingSave.current = null
+      if (mountedRef.current) {
+        setAwaitingConfirmation(uncertain)
+        setError(uncertain
+          ? 'Phiếu đang chờ xác nhận. Kiểm tra mạng rồi bấm “Kiểm tra lưu phiếu” để tiếp tục với cùng yêu cầu.'
+          : cause instanceof Error ? cause.message : 'Chưa thể lưu phiếu. Vui lòng kiểm tra kết nối rồi thử lại.')
       }
-
-      if (
-        !state.vehicleCategory ||
-        !state.trainingType
-      ) {
-        window.alert(
-          'Thiếu thông tin hạng xe hoặc loại đánh giá.',
-        )
-
-        return
-      }
-
-      if (
-        !state.studentName.trim()
-      ) {
-        window.alert(
-          'Vui lòng nhập họ và tên học viên.',
-        )
-
-        return
-      }
-
-      if (
-        !state.instructorName.trim()
-      ) {
-        window.alert(
-          'Vui lòng nhập tên giáo viên hướng dẫn.',
-        )
-
-        return
-      }
-
-      if (
-        !state.evaluationDate
-      ) {
-        window.alert(
-          'Vui lòng chọn ngày đánh giá.',
-        )
-
-        return
-      }
-
-      /**
-       * Tính kết luận cuối cùng
-       * cho phiếu sát hạch sa hình.
-       */
-      const nextState:
-        EvaluationState = {
-        ...state,
-        instructorName: selectedTeacher.name,
-        vehicleNumber: directory.vehicles.find((vehicle) => vehicle.id === selectedVehicleId && vehicle.vehicleCategory === state.vehicleCategory)?.plateNumber ?? '',
-
-        finalConclusion:
-          state.trainingType ===
-          'COURSE'
-            ? state
-                .finalConclusion ??
-              calculateConclusion(
-                state.lessons,
-              )
-            : null,
-      }
-
-      setState(nextState)
-
-      setIsSaving(true)
-
-      try {
-        /**
-         * Firebase hiện tại không
-         * yêu cầu người dùng đăng nhập.
-         *
-         * Mỗi lần hoàn tất phiếu,
-         * hệ thống tạo một document mới
-         * trong collection evaluations.
-         */
-        await saveEvaluationAdminRecord({
-          teacherName:
-            nextState
-              .instructorName
-              .trim(),
-
-          studentName:
-            nextState
-              .studentName
-              .trim(),
-
-          trainingType:
-            mapTrainingTypeForAdmin(
-              nextState
-                .trainingType!,
-            ),
-
-          vehicleCategory:
-            String(
-              nextState
-                .vehicleCategory,
-            ),
-
-          vehicleNumber:
-            nextState
-              .vehicleNumber
-              .trim(),
-
-          evaluationDate:
-            nextState
-              .evaluationDate,
-
-          practiceAttempt:
-            nextState
-              .practiceAttempt
-              .trim(),
-
-          trainingCourse:
-            nextState
-              .trainingCourse
-              .trim(),
-
-          overallResult:
-            getOverallResult(
-              nextState,
-            ),
-
-          teacherComment:
-            nextState
-              .teacherComment
-              .trim(),
-
-          /**
-           * Lưu toàn bộ dữ liệu phiếu.
-           *
-           * Trang admin sẽ dùng phần này
-           * để xem chi tiết từng nội dung.
-           */
-          evaluationData:
-            nextState,
-        })
-
-        // Preview dùng đúng snapshot đã lưu, kể cả khi danh mục đổi trong lúc gửi.
-        setState(nextState)
-        setStep('report')
-
-        scrollToTop()
-      } catch (error) {
-        console.error(
-          'Không thể lưu dữ liệu lên Firebase:',
-          error,
-        )
-
-        let message =
-          'Không thể lưu phiếu đánh giá lên Firebase.'
-
-        if (
-          error instanceof Error
-        ) {
-          message =
-            error.message
-        }
-
-        /**
-         * Một số lỗi Firebase thường gặp.
-         */
-        if (
-          message.includes(
-            'permission-denied',
-          ) ||
-          message.includes(
-            'Missing or insufficient permissions',
-          )
-        ) {
-          message =
-            'Firebase đang từ chối quyền lưu dữ liệu. Hãy kiểm tra Firestore Rules đã Publish hay chưa.'
-        }
-
-        if (
-          message.includes(
-            'unavailable',
-          )
-        ) {
-          message =
-            'Không thể kết nối Firebase. Hãy kiểm tra Internet rồi thử lại.'
-        }
-
-        window.alert(message)
-      } finally {
-        setIsSaving(false)
-      }
+    } finally {
+      savingRef.current = false
+      if (mountedRef.current) setSaving(false)
     }
+  }
 
-  /**
-   * Tạo phiếu đánh giá mới.
-   */
   const newEvaluation = () => {
-    setState(
-      { ...createEmptyState(), instructorName: selectedTeacher?.name ?? '' },
-    )
-    setSelectedVehicleId('')
-    setStep(selectedTeacher ? 'vehicle' : 'teacher')
-
-    setIsSaving(false)
-
-    scrollToTop()
+    setSaved(false)
+    setState({ ...emptyEvaluation(), instructorName: teacher?.name ?? '' })
+    setVehicleId('')
+    go(teacher ? 'vehicle' : 'teacher')
   }
 
-  /**
-   * Trang admin hiện tại.
-   *
-   * Trang admin đọc toàn bộ dữ liệu
-   * từ collection evaluations.
-   */
-  if (showAdmin) {
-    return (
-      <AdminTeachersPage />
-    )
-  }
-
+  let page
   if (step === 'teacher') {
-    return <TeacherSelectionPage
-      teachers={directory.teachers}
-      selectedTeacherId={selectedTeacher?.id ?? ''}
-      loading={directory.teachersLoading}
-      error={directory.teacherError ? 'Không thể tải danh sách giáo viên. Vui lòng thử lại hoặc liên hệ quản trị viên.' : ''}
-      onSelect={chooseTeacher}
-      onContinue={continueWithTeacher}
-      onRetry={directory.refresh}
-    />
+    page = <TeacherSelectionPage teachers={directory.teachers} selectedTeacherId={teacher?.id ?? ''}
+      loading={directory.teachersLoading} error={directory.teacherError ? 'Chưa tải được danh sách giáo viên. Vui lòng thử lại hoặc liên hệ quản trị viên.' : ''}
+      onSelect={chooseTeacher} onContinue={() => { if (teacher) go('vehicle') }} onRetry={directory.refresh} />
+  } else if (step === 'vehicle') {
+    page = <VehicleSelectionPage instructorName={teacher?.name ?? state.instructorName} selectedCategory={state.vehicleCategory}
+      vehicles={directory.vehicles} selectedVehicleId={vehicleId} loadingVehicles={directory.vehiclesLoading}
+      vehiclesError={directory.vehicleError ? 'Chưa tải được danh sách xe. Vui lòng thử lại hoặc liên hệ quản trị viên.' : ''}
+      onSelectVehicle={chooseVehicle} onSelect={chooseCategory} onContinue={() => { if (!teacher) go('teacher'); else if (state.vehicleCategory) go('training') }}
+      onChangeTeacher={() => go('teacher')} onRetry={directory.refresh} />
+  } else if (step === 'training' && state.vehicleCategory) {
+    page = <TrainingSelectionPage vehicleCategory={state.vehicleCategory} onSelect={chooseTraining} onBack={() => go('vehicle')} />
+  } else if (step === 'information') {
+    page = <StudentInformationPage state={state} onChange={update} onContinue={() => { if (validateInformation()) go('evaluation') }} onBack={() => go('training')} onChangeSession={() => go('vehicle')} />
+  } else if (step === 'evaluation') {
+    const props = { state, onChange: update, onBack: () => go('information'), onPreview: openReport }
+    page = state.trainingType === 'COURSE' ? <EvaluationPage {...props} /> : <ChecklistEvaluationPage {...props} />
+  } else {
+    page = <ReportPreviewPage state={state} saved={saved} awaitingConfirmation={awaitingConfirmation}
+      onChange={update} onEdit={() => go('evaluation')} onSave={() => { void saveReport() }} onNew={newEvaluation} />
   }
 
-  /**
-   * Bước 1:
-   * Chọn hạng xe.
-   */
-  if (
-    step === 'vehicle'
-  ) {
-    return (
-      <VehicleSelectionPage
-        instructorName={selectedTeacher?.name ?? state.instructorName}
-        selectedCategory={state.vehicleCategory}
-        vehicles={directory.vehicles}
-        selectedVehicleId={selectedVehicleId}
-        loadingVehicles={directory.vehiclesLoading}
-        vehiclesError={directory.vehicleError ? 'Không thể tải danh sách xe. Vui lòng thử lại hoặc liên hệ quản trị viên.' : ''}
-        onSelectVehicle={chooseVehicle}
-        onContinue={continueToTraining}
-        onChangeTeacher={() => { setStep('teacher'); scrollToTop() }}
-        onRetry={directory.refresh}
-        onSelect={
-          selectVehicle
-        }
-      />
-    )
-  }
-
-  /**
-   * Bước 2:
-   * Chọn nội dung tập.
-   */
-  if (
-    step === 'training' &&
-    state.vehicleCategory
-  ) {
-    return (
-      <TrainingSelectionPage
-        vehicleCategory={
-          state.vehicleCategory
-        }
-
-        onSelect={
-          selectTraining
-        }
-
-        onBack={() => { setStep('vehicle'); scrollToTop() }}
-      />
-    )
-  }
-
-  /**
-   * Bước 3:
-   * Nhập thông tin học viên.
-   */
-  if (
-    step === 'information'
-  ) {
-    return (
-      <StudentInformationPage
-        state={state}
-        onChangeSession={() => { setStep('vehicle'); scrollToTop() }}
-
-        onChange={
-          updateState
-        }
-
-        onBack={() => {
-          setStep(
-            'training',
-          )
-
-          scrollToTop()
-        }}
-
-        onContinue={
-          continueToEvaluation
-        }
-      />
-    )
-  }
-
-  /**
-   * Bước 4:
-   * Thực hiện đánh giá.
-   */
-  if (
-    step === 'evaluation'
-  ) {
-    /**
-     * Phiếu tập cơ bản
-     * hoặc đường trường.
-     */
-    if (
-      state.trainingType ===
-        'BASIC' ||
-      state.trainingType ===
-        'ROAD'
-    ) {
-      return (
-        <ChecklistEvaluationPage
-          state={state}
-
-          onChange={
-            updateState
-          }
-
-          onBack={() => {
-            setStep(
-              'information',
-            )
-
-            scrollToTop()
-          }}
-
-          onPreview={() => {
-            void openReport()
-          }}
-        />
-      )
-    }
-
-    /**
-     * Phiếu sát hạch sa hình.
-     */
-    return (
-      <EvaluationPage
-        state={state}
-
-        onChange={
-          updateState
-        }
-
-        onBack={() => {
-          setStep(
-            'information',
-          )
-
-          scrollToTop()
-        }}
-
-        onPreview={() => {
-          void openReport()
-        }}
-      />
-    )
-  }
-
-  /**
-   * Bước 5:
-   * Xem và tải phiếu đánh giá.
-   */
-  return (
-    <ReportPreviewPage
-      state={state}
-
-      onChange={
-        updateState
-      }
-
-      onEdit={() => {
-        setStep(
-          'evaluation',
-        )
-
-        scrollToTop()
-      }}
-
-      onNew={
-        newEvaluation
-      }
-    />
-  )
+  return <>
+    <div ref={contentRef}>{page}</div>
+    {error && <div className="workflow-toast" role="alert"><span>{error}</span><button className="icon-button" type="button" aria-label="Đóng thông báo" onClick={() => setError('')}><X size={17} /></button></div>}
+    {saving && <div className="save-overlay" role="status" aria-live="polite"><div><LoaderCircle className="spin" size={23} />Đang lưu phiếu đánh giá…</div></div>}
+  </>
 }

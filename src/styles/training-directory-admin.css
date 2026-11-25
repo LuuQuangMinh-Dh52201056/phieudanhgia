@@ -1,97 +1,65 @@
-.training-directory {
-  margin-bottom: 24px;
-  padding: 24px;
-  color: #183b2a;
-  border: 1px solid #d6e6dc;
-  border-radius: 21px;
-  background: #fff;
-  box-shadow: 0 14px 36px rgba(7, 83, 45, .075);
-}
-
-.training-directory__heading,
-.training-directory__panel-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.training-directory__heading { margin-bottom: 22px; }
-.training-directory__eyebrow { color: #087a3e; font-size: 10px; font-weight: 800; letter-spacing: 1.3px; }
-.training-directory h2 { margin: 7px 0 8px; font-size: 25px; line-height: 1.3; }
-.training-directory__heading p,
-.training-directory__hint { margin: 0; color: #61766a; font-size: 12px; line-height: 1.65; }
-.training-directory__hint { margin-top: 10px; }
-.training-directory__columns { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
-.training-directory__panel { min-width: 0; padding: 19px; border: 1px solid #dbe8e0; border-radius: 15px; background: #fbfdfb; }
-.training-directory__panel h3 { display: flex; align-items: center; gap: 8px; margin: 0; color: #064b29; font-size: 16px; }
-.training-directory__panel h3 > span { display: inline-grid; place-items: center; min-width: 25px; min-height: 25px; padding: 2px 6px; border-radius: 8px; background: #e7f7ed; font-size: 12px; }
-
-.training-directory button {
-  min-height: 38px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  padding: 8px 12px;
-  color: #076635;
-  border: 1px solid #bdd9c7;
-  border-radius: 9px;
-  background: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.admin-pro-page .training-directory button { font-size: 11px; font-weight: 700; }
-
-.training-directory button:hover:not(:disabled) { background: #eef8f1; }
-.training-directory button:focus-visible { outline: 3px solid #a4dcb8; outline-offset: 2px; }
-.training-directory button:disabled { opacity: .5; cursor: not-allowed; }
-.training-directory button.training-directory__primary { color: #fff; border-color: #087a3e; background: #087a3e; }
-.training-directory button.training-directory__primary:hover:not(:disabled) { background: #076635; }
-.training-directory button.training-directory__refresh { flex-shrink: 0; }
-.training-directory__list { display: flex; flex-direction: column; gap: 9px; max-height: 380px; overflow-y: auto; margin: 17px 0 0; padding: 0; list-style: none; }
-.training-directory__list > li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 11px 10px 14px; border: 1px solid #dfebe3; border-radius: 10px; background: #fff; }
-.training-directory__item-name { min-width: 0; color: #244c35; font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
-.training-directory__item-name.is-plate { letter-spacing: .5px; }
-.training-directory__item-actions { display: flex; gap: 6px; flex-shrink: 0; }
-.training-directory__item-actions button { width: 36px; min-height: 36px; padding: 0; }
-.training-directory button.is-danger { color: #c52b35; border-color: #efc4c7; }
-.training-directory button.is-danger:hover:not(:disabled) { background: #fff1f2; }
-.training-directory__tabs { display: flex; gap: 6px; margin-top: 17px; padding: 4px; border: 1px solid #dbe8e0; border-radius: 10px; background: #edf5ef; }
-.training-directory__tabs button { flex: 1; border-color: transparent; background: transparent; }
-.training-directory__tabs button[aria-selected="true"] { color: #fff; background: #087a3e; }
-.training-directory__tabs button[aria-selected="true"]:hover:not(:disabled) { background: #076635; }
-.training-directory__tabs button > span { min-width: 21px; padding: 2px 5px; border-radius: 5px; background: rgba(112, 150, 125, .16); font-size: 10px; }
-.training-directory__tabs button[aria-selected="true"] > span { background: rgba(255, 255, 255, .18); }
-.training-directory__form { display: flex; flex-direction: column; gap: 8px; margin-top: 17px; padding: 16px; border: 1px solid #badbc6; border-radius: 12px; background: #f1faf4; }
-.training-directory__form > strong { margin-bottom: 6px; color: #064b29; font-size: 13px; }
-.training-directory__form label { color: #486153; font-size: 11px; font-weight: 700; }
-.training-directory .training-directory__form input,
-.training-directory .training-directory__form select { width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; color: #183b2a; border: 1px solid #c2d9ca; border-radius: 8px; background: #fff; font-size: 13px; }
-.training-directory__form input:focus,
-.training-directory__form select:focus { outline: 2px solid #8bc8a1; outline-offset: 1px; }
-.training-directory__form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
-.training-directory__feedback { display: flex; align-items: center; gap: 8px; padding: 12px 14px; margin: 0 0 16px; border: 1px solid; border-radius: 10px; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
-.training-directory__panel > .training-directory__feedback { margin-top: 14px; }
-.training-directory__feedback.is-error { color: #9c2831; border-color: #efc4c7; background: #fff6f6; }
-.training-directory__feedback.is-success { color: #076635; border-color: #b9dac5; background: #eff9f2; }
+.training-directory { color: #13372b; }
+.training-directory__heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 23px; padding: 24px 27px; border: 1px solid #e2e9de; border-radius: 13px; background: #edf3e6; }
+.training-directory__eyebrow { display: block; color: #91a280; font-size: 9px; font-weight: 700; letter-spacing: 2px; }
+.training-directory h2 { margin: 10px 0 8px; color: #345830; font-size: 20px; font-weight: 500; letter-spacing: -.65px; }
+.training-directory__heading p { margin: 0; color: #95a487; font-size: 11px; line-height: 1.8; }
+.training-directory__columns { display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 23px; }
+.training-directory__panel { min-width: 0; padding: 23px; border: 1px solid #e3eae0; border-radius: 13px; background: #fff; }
+.training-directory__panel-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px; }
+.training-directory__panel h3 { display: flex; align-items: center; gap: 9px; margin: 0; color: #385c30; font-size: 14px; font-weight: 500; letter-spacing: -.3px; }
+.training-directory__panel h3 > svg { color: #90a481; }
+.training-directory__panel h3 > span { display: grid; place-items: center; min-width: 22px; min-height: 22px; padding: 3px 6px; border-radius: 6px; color: #8ba178; background: #f0f5e8; font-size: 11px; }
+.training-directory__hint { margin: 14px 0 0; color: #a1ae95; font-size: 11px; line-height: 1.8; }
+.training-directory :where(.training-directory__columns, .training-directory__heading) button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; padding: 9px 12px; border: 1px solid #e2e9da; border-radius: 7px; color: #718f60; background: #fff; font-size: 11px; font-weight: 500; transition: background .2s, border-color .2s; cursor: pointer; }
+.training-directory .training-directory__columns button, .training-directory .training-directory__heading button { font-size: 11px; font-weight: 500; }
+.training-directory button:hover:not(:disabled) { border-color: #bdcdb0; background: #f2f7eb; }
+.training-directory button:disabled { opacity: .45; cursor: not-allowed; }
+.training-directory button:focus-visible { outline: 3px solid #b3ce9f; outline-offset: 3px; }
+.training-directory button.training-directory__primary { color: #fff; border-color: #087a4b; background: #087a4b; }
+.training-directory button.training-directory__primary:hover:not(:disabled) { background: #07683f; }
+.training-directory button.training-directory__refresh { flex-shrink: 0; border-color: #d4dfc9; background: #ffffff91; }
+.training-directory__search { position: relative; display: flex; align-items: center; gap: 9px; min-height: 40px; margin: 21px 0 3px; padding: 0 11px; border: 1px solid #e6ecdf; border-radius: 7px; background: #fcfdf9; }
+.training-directory__search svg { flex-shrink: 0; color: #a7b49a; }
+.training-directory .training-directory__search input { width: 100%; min-width: 0; min-height: 39px; padding: 9px 0; border: 0; outline: 0; color: #5b794d; background: transparent; font-size: 12px; }
+.training-directory__search:focus-within { border-color: #a6bea0; box-shadow: 0 0 0 3px #087a4b08; }
+.training-directory__search input::placeholder { color: #b4beaa; }
+.training-directory__list { display: flex; flex-direction: column; max-height: 480px; overflow-y: auto; margin: 13px 0 0; padding: 0; list-style: none; }
+.training-directory__list > li { display: flex; align-items: center; gap: 12px; min-height: 77px; padding: 14px 0; border-bottom: 1px solid #edf1e7; }
+.training-directory__list > li:last-child { border-bottom: 0; }
+.training-directory__teacher-avatar, .training-directory__vehicle-icon { display: grid; place-items: center; width: 39px; height: 39px; flex-shrink: 0; border-radius: 50%; color: #779966; background: #edf4e4; font-size: 13px; font-weight: 500; }
+.training-directory__vehicle-icon { border-radius: 10px; color: #94a780; background: #f5f7ed; }
+.training-directory__item-name { min-width: 0; flex: 1; color: #44683a; font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.training-directory__item-name small { display: block; margin-top: 6px; color: #b0bba3; font-size: 9px; font-weight: 400; letter-spacing: 0; }
+.training-directory__item-name.is-plate { color: #587348; font-size: 12px; letter-spacing: .4px; }
+.training-directory__item-actions { display: flex; flex-shrink: 0; gap: 2px; }
+.training-directory__item-actions button { width: 31px; min-height: 33px; padding: 0; color: #a0b28f; border-color: transparent; background: transparent; }
+.training-directory__item-actions button.is-danger:hover:not(:disabled) { color: #bf6260; border-color: transparent; background: #fff3ef; }
+.training-directory__tabs { display: flex; gap: 4px; margin: 22px 0 0; padding: 4px; border: 1px solid #e8edde; border-radius: 8px; background: #f7faf2; }
+.training-directory__tabs button { flex: 1; padding: 8px 10px; border-color: transparent; background: transparent; }
+.training-directory__tabs button[aria-selected='true'] { color: #4a743b; border-color: #e3eadb; background: #fff; box-shadow: 0 2px 4px #52674505; }
+.training-directory__tabs button > span { min-width: 18px; padding: 2px 4px; border-radius: 4px; color: #adbba0; background: #edf3e4; font-size: 9px; }
+.training-directory__tabs + .training-directory__search { margin-top: 13px; }
+.training-directory__form { display: flex; flex-direction: column; gap: 9px; margin-top: 18px; padding: 20px; border: 1px solid #dce7d1; border-radius: 10px; background: #f8fbf2; }
+.training-directory__form > strong { margin: 0 0 9px; color: #637f50; font-size: 13px; font-weight: 600; }
+.training-directory__form label { color: #98a886; font-size: 11px; }
+.training-directory .training-directory__form input, .training-directory .training-directory__form select { min-width: 0; min-height: 43px; padding: 10px 12px; border: 1px solid #dfe8d5; border-radius: 7px; color: #5a7949; background: #fff; font-size: 13px; outline: 0; }
+.training-directory__form input:focus, .training-directory__form select:focus { border-color: #9dbb8d; box-shadow: 0 0 0 3px #087a4b08; }
+.training-directory__form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 9px; }
+.training-directory__feedback { display: flex; align-items: center; gap: 9px; margin: 0 0 19px; padding: 13px 16px; border: 1px solid; border-radius: 9px; font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
+.training-directory__panel > .training-directory__feedback { margin-top: 16px; }
+.training-directory__feedback.is-error { color: #b15d55; border-color: #efdcd3; background: #fff7f3; }
+.training-directory__feedback.is-success { color: #6c914d; border-color: #deead0; background: #f3f9ea; }
 .training-directory__feedback > svg { flex-shrink: 0; }
-.training-directory__empty { margin: 0; padding: 30px 12px 20px; color: #71857a; font-size: 12px; line-height: 1.8; text-align: center; }
-
-@media (max-width: 980px) {
-  .training-directory__columns { grid-template-columns: 1fr; }
-}
-
-@media (max-width: 720px) {
-  .training-directory { padding: 18px 14px; }
-  .training-directory__heading { align-items: stretch; flex-direction: column; }
-  .training-directory h2 { font-size: 21px; }
-  .training-directory__panel { padding: 15px 12px; }
-  .training-directory__panel-heading { align-items: flex-start; flex-wrap: wrap; }
-  .training-directory__panel h3 { font-size: 15px; }
-  .training-directory__item-actions button { width: 40px; min-height: 40px; }
-  .training-directory .training-directory__form input,
-  .training-directory .training-directory__form select { font-size: 16px; }
+.training-directory__empty { padding: 44px 15px 29px; margin: 0; color: #adb99e; font-size: 12px; line-height: 1.9; text-align: center; }
+@media (max-width: 1120px) { .training-directory__columns { grid-template-columns: 1fr; } }
+@media (max-width: 760px) {
+  .training-directory__heading { align-items: flex-start; flex-direction: column; gap: 17px; padding: 22px; }
+  .training-directory h2 { font-size: 18px; }
+  .training-directory__heading p { font-size: 11px; }
+  .training-directory__panel { padding: 20px; }
+  .training-directory__panel h3 { font-size: 13px; }
+  .training-directory__item-actions button { width: 36px; min-height: 41px; }
+  .training-directory__item-name { font-size: 13px; }
+  .training-directory__item-name small { font-size: 10px; }
+  .training-directory .training-directory__form input, .training-directory .training-directory__form select, .training-directory .training-directory__search input { font-size: 16px; }
 }

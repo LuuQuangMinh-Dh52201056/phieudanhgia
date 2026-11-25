@@ -1,77 +1,98 @@
-# Phiếu đánh giá thực hành lái xe
+﻿# Phú Giáo · Đánh giá thực hành lái xe
 
-Ứng dụng React + TypeScript dành cho giáo viên hướng dẫn lái xe, sử dụng Firebase Firestore để đồng bộ danh mục và phiếu đánh giá.
+Ứng dụng React + TypeScript + Firebase dành cho giáo viên và bộ phận quản trị Trung tâm Giáo dục Nghề nghiệp Phú Giáo.
 
-- Trang đầu chọn tên giáo viên từ danh sách do admin quản lý. Giáo viên được chọn mọi hạng xe và không cần nhập lại tên ở phần thông tin học viên.
-- Admin thêm, sửa, xóa giáo viên và xe đào tạo. Danh sách biển số xe được chia theo BSS, BTĐ, C1 và cập nhật theo thời gian thực.
-- Sau khi chọn hạng xe, giáo viên chọn biển số của đúng hạng; biển số không bắt buộc khi chưa có xe trong danh mục.
-- Lần tập dùng danh sách từ 1 đến 10 cho mọi hạng và loại phiếu.
+## Giao diện và nghiệp vụ
 
-- Chọn hạng B số sàn, B số tự động hoặc C1.
-- Sau khi chọn hạng xe, chọn nội dung **Tập cơ bản**, **Sa hình** hoặc **Đường trường**.
-- Tập cơ bản dùng phiếu tích nhanh 16 nội dung với các mức **Đã hiểu / Cần lưu ý / Chưa rõ**.
-- Đường trường dùng phiếu tích nhanh 11 nội dung với các mức **Tốt / Khá / Trung bình / Yếu**.
-- Toàn bộ ứng dụng sử dụng thương hiệu **Trung tâm Giáo dục Nghề nghiệp Phú Giáo**; phiếu cơ bản và đường trường lấy màu xanh làm chủ đạo.
-- Đánh giá đúng số bài theo từng hạng: BSS/BTĐ có 11 bài, C1 có 10 bài và không có ghép xe ngang.
-- Hiển thị tiêu chí và lỗi riêng theo từng hạng xe.
-- Đánh giá tình huống khẩn cấp, ghi chú từng bài và nhận xét nhanh.
-- Tự tổng hợp kết quả, đề xuất kết luận và cho phép giáo viên điều chỉnh.
-- Nút **Tải PNG** luôn có trên Android, iOS và máy tính. Khi trình duyệt trong ứng dụng chặn tải tự động, dùng **Tải lại PNG**, **Mở ảnh để lưu** hoặc nhấn giữ ảnh trong phần lưu thủ công.
-- Xuất PNG từ mẫu 1080 × 1920 px, thử độ nét 2,5 lần và tự giảm khi thiết bị không dựng được ảnh lớn. Không chặn theo tên thiết bị.
-- Trình duyệt hỗ trợ chia sẻ tệp có thêm **Chia sẻ / Lưu Ảnh**: lần chạm đầu chuẩn bị ảnh, lần tiếp theo mở bảng chia sẻ để giữ quyền thao tác người dùng. Tùy trình duyệt/hệ điều hành, có thể chọn lưu ảnh hoặc gửi sang ứng dụng khác.
-- Không có máy chủ riêng, không lưu bản nháp bằng localStorage. Phiếu được gửi lên Firestore khi bấm **Xem phiếu đánh giá**.
+- Giao diện mới xanh Phú Giáo, hỗ trợ máy tính và điện thoại từ 320 px.
+- Giáo viên chọn hạng xe và nội dung tập, nhập thông tin học viên, đánh giá rồi xem trước phiếu. Bấm **Lưu phiếu đánh giá** để chốt nội dung tại trung tâm và mở thao tác lưu ảnh.
+- Giáo viên chọn tên từ danh mục chung. Xe được lọc đúng BSS, BTĐ, C1. Lần tập chọn từ 1 đến 10.
+- Cơ bản có 16 mục; đường trường có 11 mục. Sa hình B có 11 bài, C1 có 10 bài; tình huống khẩn cấp đánh giá riêng.
+- Admin có dashboard, tìm kiếm/lọc, nhóm theo giáo viên, sửa nội dung và kết quả trên phiếu đã lưu, xuất CSV và dựng lại ảnh.
+- Xóa phiếu, giáo viên và xe dùng hộp xác nhận trong trang, có trạng thái chờ, lỗi và thử lại. Chỉ báo thành công sau khi Firebase xác nhận; danh sách cập nhật theo thời gian thực.
+- Firebase lỗi quyền hoặc mất mạng được hiển thị rõ. Thao tác ghi/xóa có thời gian chờ hữu hạn; nếu mất kết nối sau khi gửi, yêu cầu vẫn có thể hoàn tất sau đó nên cần tải lại danh sách trước khi gửi lại.
+- Trên iPhone và Android, trang chuẩn bị ảnh ngay sau khi lưu phiếu. Nút lưu ảnh mở bảng chia sẻ của máy để chọn **Lưu hình ảnh** hoặc ứng dụng ảnh được thiết bị cung cấp. Khi trình duyệt thiếu chia sẻ tệp, trang mở ảnh để nhấn giữ. Máy tính có nút tải PNG. Khi ảnh lớn không dựng được, ứng dụng thử độ phân giải thấp hơn.
 
-## Danh mục và Firebase
+## Chạy nhanh bằng dữ liệu mẫu
 
-Trang quản trị giữ đường dẫn `/admin/giaovien/A@7979`. Mục **Danh mục giáo viên & xe** nằm phía trên phần thống kê phiếu.
-
-Danh mục mới dùng hai collection:
-
-| Collection | Nội dung |
-| --- | --- |
-| `trainingTeachers` | `name`, `normalizedName`, `createdAt`, `updatedAt` |
-| `trainingVehicles` | `plateNumber`, `normalizedPlate`, `vehicleCategory`, `createdAt`, `updatedAt` |
-
-`vehicleCategory` nhận `B_MANUAL`, `B_AUTOMATIC`, `C1`. Xóa hoặc sửa danh mục không thay đổi các phiếu đã lưu trong collection `evaluations`.
-
-Firestore Rules của dự án cần cho phép đọc hai danh mục từ luồng tạo phiếu và cho phép tài khoản/cơ chế quản trị của dự án thêm, sửa, xóa các mục. Nếu Rules hiện chỉ bao phủ `evaluations`, cần bổ sung quyền cho hai collection mới. Giao diện hiển thị lỗi riêng khi thiếu quyền; mã nguồn không tự mở quyền Firestore. Cơ chế truy cập trang admin hiện có được giữ nguyên, chưa bổ sung hệ thống đăng nhập hoặc phân quyền mới.
-
-## Chạy ứng dụng
-
-```bash
+```powershell
 npm ci
+npm run test:server
+```
+
+- Trang tạo phiếu: http://127.0.0.1:4173/
+- Trang quản trị: http://127.0.0.1:4173/admin/giaovien/A@7979
+
+Server này dùng dữ liệu thử trong bộ nhớ và không gọi Firebase thật. Các thay đổi mẫu mất khi tải lại trang. Tài khoản quản trị giả của bộ thử không phải tài khoản trên hệ thống thật.
+
+## Chạy với Firebase thật
+
+Sao chép `.env.example` thành `.env.local`, điền cấu hình của Firebase project rồi chạy:
+
+```powershell
 npm run dev
 ```
 
-Mở địa chỉ Vite hiển thị trong terminal (thông thường là `http://localhost:5173`).
+Mở địa chỉ terminal hiển thị, thường là http://localhost:5173. Nếu thiếu cấu hình, ứng dụng hiện hướng dẫn thay vì màn hình trắng.
 
-Thiết lập Firebase trong `.env.local` hoặc biến môi trường của dịch vụ hosting: `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`; có thể thêm `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_MEASUREMENT_ID` theo cấu hình dự án.
+Các biến bắt buộc: `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`. Biến `VITE_FIREBASE_ADMIN_UIDS` chứa UID tài khoản quản trị, phân cách bằng dấu phẩy nếu có nhiều tài khoản; không đặt mật khẩu trong biến môi trường frontend.
+
+## Thiết lập quyền sửa và xóa trên Firebase
+
+Đọc hướng dẫn đầy đủ tại [firebase/README.md](firebase/README.md). Các bước chính:
+
+1. Bật Email/Password trong Firebase Authentication và tạo/chọn tài khoản quản trị.
+2. Sao chép UID của tài khoản đó vào `VITE_FIREBASE_ADMIN_UIDS` và danh sách `adminUids` trong [firebase/firestore.rules](firebase/firestore.rules).
+3. Publish toàn bộ Rules mới trong Firestore Database → Rules.
+4. Đặt cùng biến môi trường trên Render rồi redeploy. Biến Vite chỉ có hiệu lực sau khi build lại.
+5. Đăng nhập admin và kiểm tra sửa, xóa phiếu, giáo viên và xe bằng dữ liệu thử.
+
+Danh sách UID cho project `webdanhgia-3417e` đã được khai báo trong `firebase/firestore.rules` và `render.yaml`. Firebase áp dụng quyền sau khi Publish Rules. Render cần đồng bộ Blueprint hoặc đặt các biến tương ứng trên dashboard rồi build lại.
+
+Danh mục giáo viên và xe hỗ trợ luồng lập phiếu của giáo viên chưa đăng nhập. Quyền ghi danh mục và đọc, sửa, xóa phiếu thuộc tài khoản quản trị. Quản trị viên có thể sửa thông tin buổi tập, mức đánh giá, lỗi, ghi chú và kết quả chung trên bản ghi hiện có. Hạng xe và loại phiếu xác định bộ tiêu chí của bản ghi và được giữ khi sửa.
 
 ## Kiểm tra
 
-```bash
+```powershell
 npm run lint
 npm run build
 ```
 
-Chạy E2E bằng hai terminal:
+Với server dữ liệu mẫu đang chạy ở terminal thứ nhất, mở terminal thứ hai:
 
-```bash
-# Terminal 1: server dùng kho dữ liệu thử trong bộ nhớ
-npm run test:server
-
-# Terminal 2
+```powershell
 npm run test:e2e
 ```
 
-E2E cần Google Chrome tại đường dẫn cài đặt mặc định trên Windows. Cấu hình thử thay các store Firebase bằng mock, chặn yêu cầu ra ngoài và dừng nếu server không mang dấu hiệu mock; không dùng server production để chạy E2E. Ảnh kiểm tra được ghi vào `artifacts/e2e/`. Bộ kiểm tra bao gồm danh mục, lọc xe theo hạng, lần tập 1–10, ba loại phiếu và các nhánh tải/chia sẻ ảnh trên trình duyệt giả lập Android. Đây không phải kiểm tra trên mọi thiết bị vật lý.
+E2E dùng Chrome trên Windows và dữ liệu mẫu trong bộ nhớ. Bộ kiểm tra bao gồm đăng nhập, sửa và xóa trong quản trị, chốt kết luận trước khi lưu, ba loại phiếu, xuất PNG và thao tác chia sẻ mô phỏng. Kiểm tra việc lưu vào thư viện ảnh cần thực hiện trên thiết bị thật. Ảnh QA được ghi vào `artifacts/e2e/`.
 
-## Triển khai trên Render
+Kiểm tra quyền bằng Firestore Emulator thật, yêu cầu Java 21 trở lên:
 
-Dự án đã có sẵn Blueprint tại `render.yaml` cho Render Static Site:
+```powershell
+$env:JAVA_HOME = 'C:\Program Files\Android\Android Studio\jbr'
+$env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
+$env:DEBUG = ''
+npm run test:rules
+```
 
-- Build command: `npm ci && npm run build`
+Test chỉ chạy project `demo-phieu-danh-gia` tại localhost. Không sử dụng project hoặc dữ liệu thật; UID giả chỉ thay trong bộ nhớ của test. Kiểm tra cả xóa khi SDK mất mạng, hết thời gian chờ và kết nối lại.
+
+## Cấu trúc mã nguồn
+
+- `src/App.tsx`: điều phối quy trình và lưu phiếu.
+- `src/pages/`: các màn hình tạo phiếu và dashboard quản trị.
+- `src/components/`: báo cáo, xác thực, danh mục và hộp xác nhận dùng chung.
+- `src/services/`: kết nối Firebase, dữ liệu, quyền và xử lý lỗi/thời gian chờ.
+- `src/styles/app.css`: giao diện ứng dụng mới; `src/styles/reports.css`: mẫu in/PNG riêng.
+- `firebase/`: Rules triển khai, cấu hình emulator và hướng dẫn.
+- `scripts/`: kiểm thử, mock và server thử tách biệt với production.
+
+## Triển khai Render
+
+Giữ cấu hình Static Site trong `render.yaml`:
+
+- Build: `npm ci && npm run build`
 - Publish directory: `dist`
-- Rewrite: `/*` → `/index.html` để URL gốc và các đường dẫn của ứng dụng luôn hoạt động.
+- Rewrite: `/*` → `/index.html`
 
-Đẩy mã nguồn lên GitHub/GitLab/Bitbucket, sau đó tạo Blueprint trong Render từ repository đó. Render sẽ tự đọc cấu hình và triển khai site lên CDN.
+Thiết lập đủ biến môi trường Firebase và UID admin trên Render. Sau khi Publish Rules và redeploy, kiểm tra bằng tài khoản admin thật; các bài test local không tự thay đổi cấu hình cloud.

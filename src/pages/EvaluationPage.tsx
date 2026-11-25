@@ -40,14 +40,14 @@ export function EvaluationPage({ state, onChange, onBack, onPreview }: Evaluatio
 
   const markRemainingGood = () => {
     onChange({
-      lessons: state.lessons.map((lesson) => lesson.status ? lesson : { ...lesson, status: 'GOOD' as const }),
+      lessons: state.lessons.map((lesson) => lesson.status ? lesson : { ...lesson, status: 'GOOD' as const, selectedErrors: [] }),
     })
   }
 
   const addQuickComment = (comment: string) => {
     if (state.teacherComment.includes(comment)) return
     const separator = state.teacherComment.trim() ? ' • ' : ''
-    onChange({ teacherComment: `${state.teacherComment.trim()}${separator}${comment}` })
+    onChange({ teacherComment: `${state.teacherComment.trim()}${separator}${comment}`.slice(0, 500) })
   }
 
   const validateAndPreview = () => {

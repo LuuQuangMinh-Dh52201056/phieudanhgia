@@ -9,6 +9,7 @@ import {
   type DocumentData,
 } from 'firebase/firestore'
 import { firestoreDatabase } from '../lib/firebase'
+import { normalizeFirestoreError, requireDocumentId, runFirestoreWrite } from './firestoreOperations'
 import type { VehicleCategory } from '../types/evaluation'
 import type { Teacher, TrainingDirectoryState, TrainingVehicle } from '../types/trainingDirectory'
 
@@ -35,24 +36,7 @@ export function normalizeVehiclePlate(value: string): string {
 }
 
 export function getTrainingDirectoryError(error: unknown, action: string): string {
-  const code = error && typeof error === 'object' && 'code' in error
-    ? String(error.code)
-    : ''
-  if (code.includes('permission-denied')) {
-    return `Không có quyền ${action}. Vui lòng kiểm tra Firestore Rules cho trainingTeachers và trainingVehicles.`
-  }
-  if (code.includes('unavailable') || code.includes('network-request-failed')) {
-    return `Không thể ${action} vì mất kết nối. Kiểm tra Internet rồi thử lại.`
-  }
-  return error instanceof Error ? error.message : `Không thể ${action}. Vui lòng thử lại.`
-}
-
-function getDocumentId(id: string): string {
-  const normalized = cleanText(id)
-  if (!normalized || normalized.includes('/')) {
-    throw new Error('Mã danh mục không hợp lệ.')
-  }
-  return normalized
+  return normalizeFirestoreError(error, action).message
 }
 
 function readTeacher(id: string, data: DocumentData): Teacher | null {
@@ -110,12 +94,14 @@ export function subscribeTrainingDirectory(
         teacherError: '',
       }),
       (error) => emit({
+        teachers: [],
         teachersLoading: false,
         teacherError: getTrainingDirectoryError(error, 'tải danh mục giáo viên'),
       }),
     ))
   } catch (error) {
     emit({
+      teachers: [],
       teachersLoading: false,
       teacherError: getTrainingDirectoryError(error, 'tải danh mục giáo viên'),
     })
@@ -132,12 +118,14 @@ export function subscribeTrainingDirectory(
         vehicleError: '',
       }),
       (error) => emit({
+        vehicles: [],
         vehiclesLoading: false,
         vehicleError: getTrainingDirectoryError(error, 'tải danh mục xe'),
       }),
     ))
   } catch (error) {
     emit({
+      vehicles: [],
       vehiclesLoading: false,
       vehicleError: getTrainingDirectoryError(error, 'tải danh mục xe'),
     })
@@ -155,21 +143,24 @@ export async function saveTrainingTeacher(input: {
   const name = cleanText(input.name)
   if (!name) throw new Error('Vui lòng nhập tên giáo viên.')
   if (name.length > 120) throw new Error('Tên giáo viên không được vượt quá 120 ký tự.')
-  const data = { name, normalizedName: normalizeDirectoryName(name), updatedAt: serverTimestamp() }
+  const normalizedName = normalizeDirectoryName(name)
+  if (!normalizedName) throw new Error('Vui lòng nhập tên giáo viên hợp lệ.')
+  const data = { name, normalizedName, updatedAt: serverTimestamp() }
   if (input.id !== undefined) {
-    const id = getDocumentId(input.id)
-    await updateDoc(doc(firestoreDatabase, 'trainingTeachers', id), data)
+    const id = requireDocumentId(input.id, 'giáo viên')
+    await runFirestoreWrite(() => updateDoc(doc(firestoreDatabase, 'trainingTeachers', id), data), 'sửa giáo viên')
     return { id, name }
   }
-  const reference = await addDoc(collection(firestoreDatabase, 'trainingTeachers'), {
+  const reference = await runFirestoreWrite(() => addDoc(collection(firestoreDatabase, 'trainingTeachers'), {
     ...data,
     createdAt: serverTimestamp(),
-  })
+  }), 'thêm giáo viên')
   return { id: reference.id, name }
 }
 
 export async function deleteTrainingTeacher(id: string): Promise<void> {
-  await deleteDoc(doc(firestoreDatabase, 'trainingTeachers', getDocumentId(id)))
+  const documentId = requireDocumentId(id, 'giáo viên')
+  await runFirestoreWrite(() => deleteDoc(doc(firestoreDatabase, 'trainingTeachers', documentId)), 'xóa giáo viên')
 }
 
 export async function saveTrainingVehicle(input: {
@@ -184,17 +175,18 @@ export async function saveTrainingVehicle(input: {
   const vehicleCategory = input.vehicleCategory
   const data = { plateNumber, vehicleCategory, normalizedPlate: normalizeVehiclePlate(plateNumber), updatedAt: serverTimestamp() }
   if (input.id !== undefined) {
-    const id = getDocumentId(input.id)
-    await updateDoc(doc(firestoreDatabase, 'trainingVehicles', id), data)
+    const id = requireDocumentId(input.id, 'xe')
+    await runFirestoreWrite(() => updateDoc(doc(firestoreDatabase, 'trainingVehicles', id), data), 'sửa xe')
     return { id, plateNumber, vehicleCategory }
   }
-  const reference = await addDoc(collection(firestoreDatabase, 'trainingVehicles'), {
+  const reference = await runFirestoreWrite(() => addDoc(collection(firestoreDatabase, 'trainingVehicles'), {
     ...data,
     createdAt: serverTimestamp(),
-  })
+  }), 'thêm xe')
   return { id: reference.id, plateNumber, vehicleCategory }
 }
 
 export async function deleteTrainingVehicle(id: string): Promise<void> {
-  await deleteDoc(doc(firestoreDatabase, 'trainingVehicles', getDocumentId(id)))
+  const documentId = requireDocumentId(id, 'xe')
+  await runFirestoreWrite(() => deleteDoc(doc(firestoreDatabase, 'trainingVehicles', documentId)), 'xóa xe')
 }

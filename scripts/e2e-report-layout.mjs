@@ -33,6 +33,7 @@ try {
   await page.getByTestId('overall-BASIC_UNDERSTOOD').click()
   await page.locator('.teacher-comment-card textarea').fill('Học viên nắm được các thao tác cơ bản. Cần luyện thêm khả năng quan sát và phối hợp bàn đạp để điều khiển xe an toàn.')
   await page.getByRole('button', { name: 'Xem phiếu đánh giá' }).click()
+  await page.getByTestId('save-evaluation').click()
   await page.getByTestId('evaluation-report').waitFor()
   await page.evaluate(() => document.fonts.ready)
   const information = await page.locator('.checklist-report-info > div').evaluateAll((fields) => Object.fromEntries(fields.map((field) => [field.querySelector('span').textContent, field.querySelector('b').textContent])))

@@ -1,3 +1,52 @@
+.report-preview-heading .report-saved-label { display: inline-flex; align-items: center; gap: 6px; color: #11613b; }
+.report-delivery {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 24px;
+  margin: 0 0 18px;
+  padding: 18px 20px;
+  border: 1px solid #dbe8df;
+  border-radius: 16px;
+  background: #f4faf6;
+}
+.report-delivery__copy { display: flex; align-items: flex-start; gap: 12px; }
+.report-delivery__icon { display: grid; flex: 0 0 42px; height: 42px; place-items: center; border-radius: 12px; color: #147745; background: #e1f1e6; }
+.report-delivery h2 { margin: 0 0 5px; color: #153827; font-size: 16px; line-height: 1.3; }
+.report-delivery p, .report-commit p { margin: 0; color: #476453; font-size: 13px; line-height: 1.55; }
+.report-delivery .export-action-bar { display: flex; flex-wrap: wrap; margin: 0; gap: 8px; }
+.report-delivery .button, .report-commit .button { min-height: 44px; padding: 0 15px; font-size: 13px; }
+.report-commit {
+  position: sticky;
+  z-index: 2;
+  bottom: max(8px, env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px 16px;
+  border: 1px solid #dbe8df;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 5px 22px #1538271a;
+}
+.report-preview-canvas.report-export-host {
+  position: fixed;
+  top: 0;
+  left: -16000px;
+  width: 1080px;
+  pointer-events: none;
+}
+@media (max-width: 680px) {
+  .report-delivery { gap: 12px; padding: 14px; }
+  .report-delivery .export-action-bar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  .report-delivery [data-testid='export-share'] { grid-column: 1 / -1; order: -1; }
+  .report-commit { display: grid; padding: 10px 12px; }
+}
+@media print { .report-commit, .report-delivery, .report-export-host { display: none !important; } }
+
 .report-export-fallback {
   margin-top: 16px;
   padding: 16px;

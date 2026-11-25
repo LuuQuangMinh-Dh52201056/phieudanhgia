@@ -1,4 +1,4 @@
-import { Check, ShieldCheck } from 'lucide-react'
+import { Check, LayoutDashboard, ShieldCheck } from 'lucide-react'
 import { TrainingCenterBrand } from './TrainingCenterBrand'
 
 interface AppHeaderProps {
@@ -13,7 +13,10 @@ export function AppHeader({ activeStep }: AppHeaderProps) {
       <div className="app-header__inner">
         <div className="app-header__top">
           <TrainingCenterBrand compact />
-          <div className="app-privacy"><ShieldCheck size={17} /> Bảo mật thông tin học viên</div>
+          <div className="header-actions">
+            <span className="header-note"><ShieldCheck size={15} /> An tâm từng buổi học</span>
+            <a className="header-admin" href="/admin/giaovien/A@7979"><LayoutDashboard size={15} /> Quản trị</a>
+          </div>
         </div>
         <div className="stepper" aria-label={`Bước ${activeStep} trên ${steps.length}`}>
           {steps.map((step, index) => {

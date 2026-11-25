@@ -22,6 +22,20 @@ export const state = {
   nextId: 1,
   directoryListeners: new Set(),
   recordListeners: new Set(),
+  failures: new Map(),
+  heldOperations: new Map(),
+  operationCalls: [],
+}
+
+export async function beginOperation(operation, id) {
+  state.operationCalls.push({ operation, id })
+  const hold = state.heldOperations.get(operation)
+  if (hold) await hold.promise
+  const failure = state.failures.get(operation)
+  if (failure) {
+    state.failures.delete(operation)
+    throw Object.assign(new Error(failure.message), { code: failure.code })
+  }
 }
 
 export function directorySnapshot() {
@@ -38,7 +52,23 @@ export function publishRecords() {
 
 // Test-only inspection/control. No localStorage, network, or production import.
 globalThis.__E2E_STORES__ = {
-  snapshot: () => ({ ...directorySnapshot(), records: clone(state.records) }),
+  snapshot: () => ({ ...directorySnapshot(), records: clone(state.records), activeRecordSubscriptions: state.recordListeners.size, operationCalls: clone(state.operationCalls) }),
+  replaceRecords(records) {
+    state.records = clone(records)
+    publishRecords()
+  },
+  failNext(operation, failure) {
+    state.failures.set(operation, { code: failure.code || 'unknown', message: failure.message || 'Lỗi dịch vụ thử nghiệm.' })
+  },
+  holdOperation(operation) {
+    let release
+    const promise = new Promise((resolve) => { release = resolve })
+    state.heldOperations.set(operation, { promise, release })
+  },
+  releaseOperation(operation) {
+    state.heldOperations.get(operation)?.release()
+    state.heldOperations.delete(operation)
+  },
   replaceDirectory(directory) {
     if (directory.teachers) state.teachers = clone(directory.teachers)
     if (directory.vehicles) state.vehicles = clone(directory.vehicles)

@@ -47,7 +47,7 @@ export function VehicleSelectionPage({ onSelect, instructorName, selectedCategor
           </div>
           <div className="vehicle-card-grid">
             {VEHICLE_CATEGORIES.map((category) => (
-              <button className={`vehicle-card ${selectedCategory === category.id ? 'vehicle-card--selected' : ''}`} aria-pressed={selectedCategory === category.id} type="button" key={category.id} onClick={() => onSelect(category.id)}>
+              <button className={`vehicle-card ${selectedCategory === category.id ? 'vehicle-card--selected' : ''}`} aria-label={`HẠNG XE ${category.label}`} aria-pressed={selectedCategory === category.id} type="button" key={category.id} onClick={() => onSelect(category.id)}>
                 {category.id === 'B_MANUAL' && <span className="vehicle-card__popular">★ Phổ biến</span>}
                 <div className="vehicle-card__badge">{vehicleIcons[category.id]}</div>
                 <div className="vehicle-card__content">

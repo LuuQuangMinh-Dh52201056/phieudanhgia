@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toCanvas } from 'html-to-image'
-import { ArrowLeft, CheckCircle2, Download, FilePenLine, Images, LoaderCircle, RefreshCcw, Share2, TriangleAlert } from 'lucide-react'
+import { CheckCircle2, Download, FilePenLine, Images, LoaderCircle, RefreshCcw, Save, Share2, TriangleAlert } from 'lucide-react'
 import { AppHeader } from '../components/AppHeader'
 import { AppFooter } from '../components/AppFooter'
 import { ChecklistReport } from '../components/ChecklistReport'
@@ -8,13 +8,16 @@ import { EvaluationReport } from '../components/EvaluationReport'
 import { PHU_GIAO_LOGO_DATA_URL } from '../components/TrainingCenterBrand'
 import type { EvaluationState } from '../types/evaluation'
 import { CONCLUSION_META, COURSE_CONCLUSIONS, generateFileName } from '../utils/evaluation'
-import { canSharePng, canvasToPngBlob, describeExportError, getExportPixelRatios } from '../utils/reportExport'
+import { canSharePng, canvasToPngBlob, describeExportError, getExportPixelRatios, getPhotoDevice, getPngFile, photoSaveInstructions } from '../utils/reportExport'
 import '../styles/report-export.css'
 
 interface ReportPreviewPageProps {
   state: EvaluationState
+  saved: boolean
+  awaitingConfirmation: boolean
   onChange: (updates: Partial<EvaluationState>) => void
   onEdit: () => void
+  onSave: () => void
   onNew: () => void
 }
 
@@ -34,11 +37,13 @@ interface PreparedImage {
   height: number
 }
 
-export function ReportPreviewPage({ state, onChange, onEdit, onNew }: ReportPreviewPageProps) {
+export function ReportPreviewPage({ state, saved, awaitingConfirmation, onChange, onEdit, onSave, onNew }: ReportPreviewPageProps) {
   const reportRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const mountedRef = useRef(true)
   const operationRef = useRef(false)
+  const manualRef = useRef<HTMLDetailsElement>(null)
+  const autoPrepared = useRef<EvaluationState | null>(null)
   const stateRef = useRef(state)
   stateRef.current = state
   const [busy, setBusy] = useState<'download' | 'prepare' | 'share' | null>(null)
@@ -46,6 +51,7 @@ export function ReportPreviewPage({ state, onChange, onEdit, onNew }: ReportPrev
   const [preparedImage, setPreparedImage] = useState<PreparedImage | null>(null)
   const prepared = preparedImage?.source === state ? preparedImage : null
   const supportsShare = typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && typeof File === 'function'
+  const photoDevice = getPhotoDevice()
   const isChecklist = state.trainingType === 'BASIC' || state.trainingType === 'ROAD'
 
   useEffect(() => {
@@ -88,11 +94,11 @@ export function ReportPreviewPage({ state, onChange, onEdit, onNew }: ReportPrev
     return () => window.removeEventListener('resize', resize)
   }, [state])
 
-  const prepareNode = async () => {
-    const node = reportRef.current
-    if (!node) throw new Error('Không tìm thấy phiếu đánh giá.')
+  const prepareNode = useCallback(async (offscreen: boolean) => {
+    const report = reportRef.current
+    if (!report) throw new Error('Không tìm thấy phiếu đánh giá.')
     if (document.fonts) await document.fonts.ready
-    await Promise.all(Array.from(node.querySelectorAll('img')).map(async (image) => {
+    await Promise.all(Array.from(report.querySelectorAll('img')).map(async (image) => {
       if (!image.complete) {
         await new Promise<void>((resolve, reject) => {
           const finish = () => {
@@ -112,24 +118,34 @@ export function ReportPreviewPage({ state, onChange, onEdit, onNew }: ReportPrev
       }
       try { await image.decode?.() } catch { /* A failed decode can still be rendered by the browser. */ }
     }))
+    const host = offscreen ? document.createElement('div') : null
+    const node = host ? report.cloneNode(true) as HTMLDivElement : report
+    if (host) {
+      host.className = 'report-preview-canvas report-export-host'
+      host.setAttribute('aria-hidden', 'true')
+      node.removeAttribute('data-testid')
+      host.appendChild(node)
+      stageRef.current?.parentElement?.appendChild(host)
+    }
     const previousStyle = node.getAttribute('style')
     const hadFlatColors = node.classList.contains('report-export-flat')
     node.classList.add('report-export-flat')
     Object.assign(node.style, { transform: 'none', position: 'static', left: '0', marginLeft: '0' })
-    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+    if (!offscreen) await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
     return {
       node,
       restore: () => {
+        if (host) { host.remove(); return }
         if (!hadFlatColors) node.classList.remove('report-export-flat')
         if (previousStyle === null) node.removeAttribute('style')
         else node.setAttribute('style', previousStyle)
       },
     }
-  }
+  }, [])
 
-  const createImage = async (): Promise<PreparedImage> => {
+  const createImage = useCallback(async (offscreen = false): Promise<PreparedImage> => {
     if (prepared) return prepared
-    const { node, restore } = await prepareNode()
+    const { node, restore } = await prepareNode(offscreen)
     let result: { blob: Blob; width: number; height: number } | null = null
     try {
       const width = node.offsetWidth
@@ -192,24 +208,34 @@ export function ReportPreviewPage({ state, onChange, onEdit, onNew }: ReportPrev
     }
     if (!mountedRef.current || stateRef.current !== state) throw new Error('Nội dung phiếu đã thay đổi. Vui lòng tạo lại ảnh.')
     const fileName = generateFileName(state)
-    let file: File | null = null
-    try {
-      if (typeof File === 'function') file = new File([result.blob], fileName, { type: 'image/png' })
-    } catch {
-      // A webview may expose File without supporting its constructor. Sharing
-      // is optional; the PNG Blob must still remain downloadable.
-    }
     const image: PreparedImage = {
       source: state,
       url: URL.createObjectURL(result.blob),
-      file,
+      file: getPngFile(result.blob, fileName),
       fileName,
       width: result.width,
       height: result.height,
     }
     setPreparedImage(image)
     return image
-  }
+  }, [prepareNode, prepared, state])
+
+  useEffect(() => {
+    if (!saved || !photoDevice || prepared || autoPrepared.current === state) return
+    const timer = window.setTimeout(() => {
+      if (operationRef.current) return
+      autoPrepared.current = state
+      operationRef.current = true
+      setBusy('prepare')
+      void createImage(true).catch((error: unknown) => {
+        if (mountedRef.current) setNotice({ text: describeExportError(error), error: true })
+      }).finally(() => {
+        operationRef.current = false
+        if (mountedRef.current) setBusy(null)
+      })
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [createImage, photoDevice, prepared, saved, state])
 
   const downloadImage = async () => {
     if (operationRef.current) return
@@ -217,7 +243,7 @@ export function ReportPreviewPage({ state, onChange, onEdit, onNew }: ReportPrev
     setBusy('download')
     setNotice({ text: '', error: false })
     try {
-      const image = await createImage()
+      const image = await createImage(Boolean(photoDevice))
       const link = document.createElement('a')
       link.download = image.fileName
       link.href = image.url
@@ -232,6 +258,14 @@ export function ReportPreviewPage({ state, onChange, onEdit, onNew }: ReportPrev
     }
   }
 
+  const openManualSave = () => {
+    window.requestAnimationFrame(() => {
+      if (!manualRef.current) return
+      manualRef.current.open = true
+      manualRef.current.scrollIntoView({ block: 'nearest' })
+    })
+  }
+
   const shareImage = async () => {
     if (operationRef.current) return
     operationRef.current = true
@@ -239,10 +273,12 @@ export function ReportPreviewPage({ state, onChange, onEdit, onNew }: ReportPrev
     if (!prepared) {
       setBusy('prepare')
       try {
-        const image = await createImage()
-        setNotice({ text: canSharePng(image.file)
-          ? 'Ảnh đã sẵn sàng. Chạm “Chia sẻ ảnh” để chọn ứng dụng hoặc “Lưu hình ảnh” nếu bảng chia sẻ có lựa chọn này.'
-          : 'Trình duyệt chưa hỗ trợ chia sẻ tệp PNG. Bạn có thể tải PNG hoặc mở ảnh để lưu bằng các liên kết bên dưới.', error: false })
+        const image = await createImage(Boolean(photoDevice))
+        if (canSharePng(image.file)) {
+          setNotice({ text: 'Ảnh đã sẵn sàng. Chạm lại nút lưu ảnh để mở bảng chia sẻ.', error: false })
+        } else {
+          openManualSave()
+        }
       } catch (error) {
         if (mountedRef.current) setNotice({ text: describeExportError(error), error: true })
       } finally {
@@ -254,17 +290,20 @@ export function ReportPreviewPage({ state, onChange, onEdit, onNew }: ReportPrev
     setBusy('share')
     try {
       if (!canSharePng(prepared.file)) {
-        setNotice({ text: 'Trình duyệt chưa hỗ trợ chia sẻ tệp PNG. Hãy dùng “Tải PNG” hoặc “Mở ảnh để lưu”.', error: false })
+        setNotice({ text: 'Trình duyệt chưa hỗ trợ chia sẻ tệp PNG. Nhấn giữ ảnh bên dưới để xem các tùy chọn lưu.', error: false })
+        openManualSave()
         return
       }
-      // The file was prepared on the previous click. Call share immediately
-      // during this user gesture, without waiting for fonts/canvas/PNG encoding.
+      // Call share during this gesture, with the prepared file already available.
       await navigator.share({ files: [prepared.file!] })
-      if (mountedRef.current) setNotice({ text: 'Đã mở bảng chia sẻ. Hãy hoàn tất thao tác trong ứng dụng hoặc mục lưu ảnh bạn đã chọn.', error: false })
+      if (mountedRef.current) setNotice({ text: `Đã mở bảng chia sẻ. ${photoSaveInstructions(photoDevice)}`, error: false })
     } catch (error) {
-      if (mountedRef.current) setNotice({ text: error instanceof Error && error.name === 'AbortError'
-        ? 'Đã đóng bảng chia sẻ. Bạn vẫn có thể tải hoặc mở ảnh để lưu.'
-        : 'Chưa thể chia sẻ tệp. Hãy chạm “Chia sẻ ảnh” để thử lại, hoặc tải PNG/mở ảnh bằng các liên kết bên dưới.', error: !(error instanceof Error && error.name === 'AbortError') })
+      if (mountedRef.current) {
+        const cancelled = error instanceof Error && error.name === 'AbortError'
+        setNotice({ text: cancelled ? 'Đã đóng bảng chia sẻ. Bạn có thể thử lại hoặc mở ảnh để lưu.'
+          : 'Chưa thể mở bảng chia sẻ. Nhấn giữ ảnh bên dưới để xem các tùy chọn lưu.', error: !cancelled })
+        if (!cancelled) openManualSave()
+      }
     } finally {
       operationRef.current = false
       if (mountedRef.current) setBusy(null)
@@ -277,20 +316,21 @@ export function ReportPreviewPage({ state, onChange, onEdit, onNew }: ReportPrev
       <main className="report-preview-content">
         <div className="report-preview-heading">
           <div>
-            <span>PHIẾU ĐÃ HOÀN THÀNH</span>
-            <h1>Xem trước & xuất ảnh</h1>
-            <p>Kiểm tra thông tin, chọn kết luận cuối cùng rồi tải ảnh hoặc chia sẻ.</p>
+            {saved && <span className="report-saved-label"><CheckCircle2 size={15} /> Đã lưu tại trung tâm</span>}
+            <h1>{saved ? 'Phiếu đánh giá đã lưu' : 'Kiểm tra phiếu đánh giá'}</h1>
+            <p>{saved ? state.studentName : 'Kiểm tra nội dung và chốt kết quả trước khi lưu phiếu.'}</p>
           </div>
-          <button type="button" onClick={onEdit} disabled={busy !== null}><FilePenLine size={18} /> Sửa đánh giá</button>
+          {!saved && !awaitingConfirmation && <button type="button" onClick={onEdit}><FilePenLine size={18} /> Sửa đánh giá</button>}
         </div>
 
-        {!isChecklist && (
+        {!saved && !isChecklist && (
           <section className="conclusion-control">
             <strong>Kết luận cuối cùng</strong>
-            <p>Hệ thống đã đề xuất dựa trên kết quả; giáo viên có thể thay đổi trước khi xuất.</p>
+            <p>Chọn kết luận sẽ xuất hiện trên phiếu lưu và ảnh.</p>
             <div className="conclusion-options">
               {COURSE_CONCLUSIONS.map((key) => (
-                <button type="button" key={key} className={state.finalConclusion === key ? 'is-selected' : ''} disabled={busy !== null} onClick={() => onChange({ finalConclusion: key })}>
+                <button type="button" key={key} className={state.finalConclusion === key ? 'is-selected' : ''} disabled={awaitingConfirmation}
+                  aria-pressed={state.finalConclusion === key} onClick={() => onChange({ finalConclusion: key })}>
                   <span>{state.finalConclusion === key && <CheckCircle2 size={17} />}</span>{CONCLUSION_META[key].label}
                 </button>
               ))}
@@ -298,37 +338,49 @@ export function ReportPreviewPage({ state, onChange, onEdit, onNew }: ReportPrev
           </section>
         )}
 
+        {saved && <section className="report-delivery" aria-label="Lưu và chia sẻ ảnh phiếu">
+          <div className="report-delivery__copy">
+            <div className="report-delivery__icon"><Images size={22} aria-hidden="true" /></div>
+            <div><h2>Ảnh phiếu đánh giá</h2><p>{photoDevice ? photoSaveInstructions(photoDevice) : 'Xuất ảnh PNG để lưu hoặc gửi cho học viên.'}</p></div>
+          </div>
+          <div className="export-action-bar">
+            {(photoDevice || supportsShare) && <button className={`button ${photoDevice ? 'button--primary' : 'button--outline'}`} type="button"
+              data-testid="export-share" onClick={() => void shareImage()} disabled={busy !== null}>
+              {busy === 'share' || busy === 'prepare' ? <LoaderCircle className="spin" size={19} /> : <Share2 size={19} />}
+              {busy === 'prepare' ? 'Đang chuẩn bị ảnh…' : photoDevice === 'ios' ? 'Lưu vào Ảnh' : photoDevice === 'android' ? 'Lưu vào bộ sưu tập' : 'Chia sẻ ảnh'}
+            </button>}
+            <button className={`button ${photoDevice ? 'button--ghost' : 'button--primary'}`} type="button" data-testid="export-download"
+              onClick={() => void downloadImage()} disabled={busy !== null}>
+              {busy === 'download' ? <LoaderCircle className="spin" size={19} /> : <Download size={19} />} Tải PNG
+            </button>
+            <button className="button button--ghost report-delivery__new" type="button" onClick={onNew} disabled={busy !== null}><RefreshCcw size={18} /> Tạo phiếu mới</button>
+          </div>
+        </section>}
+
+        {notice.text && <div className={`export-message ${notice.error ? 'export-message--error' : ''}`} role={notice.error ? 'alert' : 'status'}>{notice.error ? <TriangleAlert size={19} /> : <CheckCircle2 size={19} />} {notice.text}</div>}
+
         <div className="report-preview-canvas" ref={stageRef}>
           {isChecklist
             ? <ChecklistReport state={state} reportRef={reportRef} />
             : <EvaluationReport state={state} reportRef={reportRef} />}
         </div>
 
-        <div className="export-action-bar">
-          <button className="button button--ghost" type="button" onClick={onEdit} disabled={busy !== null}><ArrowLeft size={18} /> Sửa đánh giá</button>
-          {supportsShare && (
-            <button className="button button--outline" type="button" data-testid="export-share" onClick={() => void shareImage()} disabled={busy !== null}>
-              {busy === 'share' || busy === 'prepare' ? <LoaderCircle className="spin" size={19} /> : <Share2 size={19} />}
-              {prepared ? 'Chia sẻ ảnh' : 'Chia sẻ / Lưu Ảnh'}
-            </button>
-          )}
-          <button className="button button--primary button--large" type="button" data-testid="export-download" onClick={() => void downloadImage()} disabled={busy !== null}>
-            {busy === 'download' ? <LoaderCircle className="spin" size={19} /> : <Download size={19} />}
-            Tải PNG
+        {!saved && <div className="report-commit">
+          <p>{awaitingConfirmation ? 'Đang chờ Firebase xác nhận yêu cầu lưu.' : 'Ảnh được xuất từ nội dung đã lưu tại trung tâm.'}</p>
+          <button className="button button--primary" type="button" data-testid="save-evaluation" onClick={onSave}>
+            <Save size={18} /> {awaitingConfirmation ? 'Kiểm tra lưu phiếu' : 'Lưu phiếu đánh giá'}
           </button>
-          <button className="button button--danger-ghost" type="button" onClick={onNew} disabled={busy !== null}><RefreshCcw size={18} /> Tạo phiếu mới</button>
-        </div>
-        {notice.text && <div className={`export-message ${notice.error ? 'export-message--error' : ''}`} role={notice.error ? 'alert' : 'status'}>{notice.error ? <TriangleAlert size={19} /> : <CheckCircle2 size={19} />} {notice.text}</div>}
+        </div>}
 
         {prepared && (
           <section className="report-export-fallback" data-testid="export-fallback" aria-label="Lưu ảnh PNG đã tạo">
             <strong><Images size={17} aria-hidden="true" /> PNG đã sẵn sàng · {prepared.width} × {prepared.height}px</strong>
-            <p>Nếu trình duyệt trong ứng dụng chưa tải tệp, hãy mở ảnh rồi nhấn giữ/chọn lưu. Bạn cũng có thể mở trang này bằng trình duyệt ngoài ứng dụng để tải lại.</p>
+            <p>{photoDevice ? 'Mở ảnh hoặc nhấn giữ ảnh bên dưới rồi chọn thao tác lưu ảnh của trình duyệt.' : 'Mở ảnh để xem toàn bộ hoặc tải xuống dưới dạng PNG.'}</p>
             <div className="report-export-fallback__links">
               <a href={prepared.url} download={prepared.fileName} data-testid="export-download-link">Tải lại PNG</a>
               <a href={prepared.url} target="_blank" rel="noopener noreferrer" data-testid="export-open-image">Mở ảnh để lưu</a>
             </div>
-            <details>
+            <details ref={manualRef}>
               <summary>Xem ảnh để lưu thủ công</summary>
               <img src={prepared.url} alt={`Phiếu đánh giá của ${state.studentName}; nhấn giữ hoặc mở menu ảnh để lưu`} />
             </details>

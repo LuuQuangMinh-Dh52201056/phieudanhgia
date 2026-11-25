@@ -41,6 +41,25 @@ export function canSharePng(file: File | null): boolean {
   }
 }
 
+export function getPhotoDevice(): 'ios' | 'android' | null {
+  if (/iPad|iPhone|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) return 'ios'
+  return /Android/i.test(navigator.userAgent) ? 'android' : null
+}
+
+export function getPngFile(blob: Blob, fileName: string): File | null {
+  try {
+    return typeof File === 'function' ? new File([blob], fileName, { type: 'image/png' }) : null
+  } catch {
+    return null
+  }
+}
+
+export function photoSaveInstructions(device: ReturnType<typeof getPhotoDevice>): string {
+  if (device === 'ios') return 'Chọn “Lưu hình ảnh” trong bảng chia sẻ để đưa phiếu vào ứng dụng Ảnh.'
+  if (device === 'android') return 'Chọn ứng dụng Ảnh hoặc Bộ sưu tập nếu có trong bảng chia sẻ của thiết bị.'
+  return 'Chọn ứng dụng nhận ảnh trong bảng chia sẻ của thiết bị.'
+}
+
 export function describeExportError(error: unknown): string {
   if (error instanceof Error) {
     if (error.name === 'SecurityError') {
