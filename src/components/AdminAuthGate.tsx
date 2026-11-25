@@ -90,8 +90,8 @@ export function AdminAuthGate({ children }: AdminAuthGateProps) {
           <div className="admin-auth-setup">
             <ol>
               <li>Mở Firebase Console → Authentication, bật phương thức Email/Password và tạo hoặc chọn tài khoản quản trị.</li>
-              <li>Sao chép UID của tài khoản. Trong Render → Environment, thêm <code>VITE_FIREBASE_ADMIN_UIDS</code> với UID này. Nếu có nhiều tài khoản, phân cách bằng dấu phẩy.</li>
-              <li>Thêm cùng UID vào danh sách quản trị trong Firestore Rules của hai danh mục, rồi triển khai lại ứng dụng để áp dụng biến môi trường.</li>
+              <li>Thêm UID vào danh sách quản trị trong Firestore Rules. Với dự án Firebase riêng, đặt cùng UID trong <code>VITE_FIREBASE_ADMIN_UIDS</code> ở Render → Environment.</li>
+              <li>Publish Firestore Rules, rồi chọn <strong>Save, rebuild, and deploy</strong> trong Render để tạo bản web mới.</li>
             </ol>
             <p>Mật khẩu được nhập tại trang đăng nhập sau khi cấu hình xong.</p>
             <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer">Mở Firebase Console</a>

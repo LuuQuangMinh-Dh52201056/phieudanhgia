@@ -35,19 +35,19 @@ npm run dev
 
 Mở địa chỉ terminal hiển thị, thường là http://localhost:5173. Nếu thiếu cấu hình, ứng dụng hiện hướng dẫn thay vì màn hình trắng.
 
-Các biến bắt buộc: `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`. Biến `VITE_FIREBASE_ADMIN_UIDS` chứa UID tài khoản quản trị, phân cách bằng dấu phẩy nếu có nhiều tài khoản; không đặt mật khẩu trong biến môi trường frontend.
+Các biến bắt buộc gồm `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID` và `VITE_FIREBASE_APP_ID`. Khi build với project `webdanhgia-3417e`, Vite lấy UID từ `firebase/firestore.rules` nếu `VITE_FIREBASE_ADMIN_UIDS` trống hoặc chứa giá trị mẫu. Với project Firebase khác, đặt biến này bằng danh sách UID quản trị, phân cách bằng dấu phẩy. Mật khẩu chỉ nhập trên form đăng nhập.
 
 ## Thiết lập quyền sửa và xóa trên Firebase
 
 Đọc hướng dẫn đầy đủ tại [firebase/README.md](firebase/README.md). Các bước chính:
 
 1. Bật Email/Password trong Firebase Authentication và tạo/chọn tài khoản quản trị.
-2. Sao chép UID của tài khoản đó vào `VITE_FIREBASE_ADMIN_UIDS` và danh sách `adminUids` trong [firebase/firestore.rules](firebase/firestore.rules).
+2. Điền UID vào danh sách `adminUids` trong [firebase/firestore.rules](firebase/firestore.rules). Nếu Render có biến `VITE_FIREBASE_ADMIN_UIDS`, đặt biến này theo cùng danh sách.
 3. Publish toàn bộ Rules mới trong Firestore Database → Rules.
-4. Đặt cùng biến môi trường trên Render rồi redeploy. Biến Vite chỉ có hiệu lực sau khi build lại.
+4. Trên dịch vụ Render của website, chọn **Manual Deploy → Deploy latest commit**. Nếu vừa đổi biến môi trường, chọn **Save, rebuild, and deploy** để Vite đọc biến trong lần build mới.
 5. Đăng nhập admin và kiểm tra sửa, xóa phiếu, giáo viên và xe bằng dữ liệu thử.
 
-Danh sách UID cho project `webdanhgia-3417e` đã được khai báo trong `firebase/firestore.rules` và `render.yaml`. Firebase áp dụng quyền sau khi Publish Rules. Render cần đồng bộ Blueprint hoặc đặt các biến tương ứng trên dashboard rồi build lại.
+Danh sách UID cho project `webdanhgia-3417e` đã được khai báo trong `firebase/firestore.rules` và `render.yaml`. Nếu dịch vụ Render được tạo ngoài Blueprint, bản build vẫn lấy danh sách từ Rules trong Git khi biến UID bị thiếu. Firebase áp dụng quyền dữ liệu sau khi Publish Rules trên Console.
 
 Danh mục giáo viên và xe hỗ trợ luồng lập phiếu của giáo viên chưa đăng nhập. Quyền ghi danh mục và đọc, sửa, xóa phiếu thuộc tài khoản quản trị. Quản trị viên có thể sửa thông tin buổi tập, mức đánh giá, lỗi, ghi chú và kết quả chung trên bản ghi hiện có. Hạng xe và loại phiếu xác định bộ tiêu chí của bản ghi và được giữ khi sửa.
 

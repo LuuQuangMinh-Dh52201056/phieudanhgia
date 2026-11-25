@@ -12,7 +12,7 @@ import { BackendOperationError, getBackendErrorCode } from './firestoreOperation
 
 const configuredUids = String(import.meta.env.VITE_FIREBASE_ADMIN_UIDS ?? '').split(/[\s,]+/).filter(Boolean)
 // Match the rules' placeholder behavior: incomplete setup never authorizes an account.
-const authorizedUids = new Set(configuredUids.includes('REPLACE_WITH_ADMIN_UID')
+const authorizedUids = new Set(configuredUids.some((uid) => uid === 'REPLACE_WITH_ADMIN_UID' || uid === 'UID_ADMIN_THAT')
   ? [] : configuredUids.filter((uid) => uid.length <= 128))
 
 function translateAuthError(error: unknown): Error {
