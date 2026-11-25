@@ -51,7 +51,7 @@ Danh sách UID cho project `webdanhgia-3417e` đã được khai báo trong `fir
 
 Danh mục giáo viên và xe hỗ trợ luồng lập phiếu của giáo viên chưa đăng nhập. Quyền ghi danh mục và đọc, sửa, xóa phiếu thuộc tài khoản quản trị. Quản trị viên có thể sửa thông tin buổi tập, mức đánh giá, lỗi, ghi chú và kết quả chung trên bản ghi hiện có. Hạng xe và loại phiếu xác định bộ tiêu chí của bản ghi và được giữ khi sửa.
 
-Trang quản trị hỗ trợ **Dùng thiết bị này**. Sau khi cấp quyền cho mã của trình duyệt, người dùng có thể mở đường dẫn quản trị trực tiếp trên trình duyệt đó. [Cách cấp và thu hồi quyền thiết bị](firebase/README.md#truy-cập-quản-trị-bằng-thiết-bị).
+Đường dẫn quản trị mở thẳng giao diện Tổng quan. Thống kê, danh sách và các thao tác quản lý tải khi trình duyệt có phiên quản trị hợp lệ. Với trình duyệt mới, mục **Dùng thiết bị này** nằm ngay trong Tổng quan. [Cách cấp và thu hồi quyền thiết bị](firebase/README.md#truy-cập-quản-trị-bằng-thiết-bị).
 
 ## Kiểm tra
 

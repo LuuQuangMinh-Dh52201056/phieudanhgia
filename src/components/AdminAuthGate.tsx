@@ -1,8 +1,9 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { ArrowUpRight, Copy, Laptop, LockKeyhole, LogIn, LogOut, ShieldCheck } from 'lucide-react'
-import { TrainingCenterBrand } from './TrainingCenterBrand'
+import { Fragment, useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { Copy, Laptop, LockKeyhole, LogIn, LogOut, ShieldCheck } from 'lucide-react'
+import { AdminDashboardLayout, AdminDashboardStats, type AdminView } from './AdminDashboardLayout'
 import { signInAdmin, signOutAdmin, startAdminDevice, subscribeAdminSession } from '../services/adminAuthStore'
 import type { AdminSession } from '../types/adminAuth'
+import { formatDate, getTodayInputValue } from '../utils/evaluation'
 import '../styles/admin-auth.css'
 
 interface AdminAuthGateProps {
@@ -19,6 +20,7 @@ const initialSession: AdminSession = {
 
 export function AdminAuthGate({ children }: AdminAuthGateProps) {
   const [session, setSession] = useState(initialSession)
+  const [view, setView] = useState<AdminView>('overview')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [useEmail, setUseEmail] = useState(false)
@@ -81,18 +83,14 @@ export function AdminAuthGate({ children }: AdminAuthGateProps) {
     }
   }
 
-  if (session.loading) {
-    return <main className="admin-auth-page"><div className="admin-auth-loading" role="status"><ShieldCheck size={30} /><p>Đang kiểm tra phiên đăng nhập...</p></div></main>
-  }
-
-  if (session.isAuthorized && session.user) {
+  if (!session.loading && session.isAuthorized && session.user) {
     return <>
       <section className="admin-auth-toolbar" aria-label="Phiên quản trị">
         <div><ShieldCheck size={18} /><span>Quản trị viên</span><strong>{session.user.isAnonymous ? 'Thiết bị đã cấp quyền' : session.user.email || 'Tài khoản quản trị'}</strong></div>
         <button type="button" onClick={() => { void signOut() }} disabled={busy !== null}><LogOut size={16} />{busy === 'signout' ? 'Đang đăng xuất...' : session.user.isAnonymous ? 'Thoát trên thiết bị này' : 'Đăng xuất'}</button>
         {error && <p role="alert">{error}</p>}
       </section>
-      {children}
+      <Fragment key={session.user.uid}>{children}</Fragment>
     </>
   }
 
@@ -109,21 +107,20 @@ export function AdminAuthGate({ children }: AdminAuthGateProps) {
     setUseEmail(true)
   }
 
-  return (
-    <main className="admin-auth-page">
-      <aside className="admin-auth-story" aria-label="Không gian quản trị Phú Giáo">
-        <TrainingCenterBrand light />
-        <div className="admin-auth-story-copy"><span>PHÚ GIÁO · QUẢN LÝ ĐÀO TẠO</span><h2>Tận tâm hôm nay.<br />Vững tay lái<br /><em>ngày mai.</em></h2><p>Một không gian để đội ngũ kết nối, mỗi buổi học được ghi nhận và mọi tiến bộ được nhìn thấy.</p></div>
-        <div className="admin-auth-story-route" aria-hidden="true"><svg viewBox="0 0 580 220" fill="none"><path d="M-30 180H160C245 180 230 38 320 38H610" stroke="currentColor" strokeWidth="64" /><path d="M-30 180H160C245 180 230 38 320 38H610" stroke="#cce49b" strokeOpacity=".5" strokeWidth="1.5" strokeDasharray="10 14" /></svg><span><ShieldCheck size={23} /></span></div>
-        <div className="admin-auth-story-footer"><span>AN TOÀN · TRÁCH NHIỆM · VỮNG TAY LÁI</span><ArrowUpRight size={20} /></div>
-      </aside>
-      <section className="admin-auth-card" aria-label="Xác thực quản trị">
-        <div className="admin-auth-mobile-brand"><TrainingCenterBrand compact /></div>
-        <div className="admin-auth-icon"><LockKeyhole size={28} /></div>
-        <span className="admin-auth-eyebrow">KHU VỰC QUẢN TRỊ</span>
-        <h1>{title}</h1>
+  return <div className="admin-dashboard">
+    <AdminDashboardLayout
+      view={view}
+      onViewChange={setView}
+      status={session.loading ? 'Đang kiểm tra quyền' : 'Chờ cấp quyền'}
+      statusAttention={!session.loading}
+    >
+      {view === 'overview' && <AdminDashboardStats todayLabel={formatDate(getTodayInputValue())} />}
+      {session.loading ? <section className="admin-card admin-auth-card" role="status">
+        <p>Đang kiểm tra phiên đăng nhập...</p>
+      </section> : <section className="admin-card admin-auth-card" aria-label="Xác thực quản trị">
+        <header className="admin-auth-card-heading"><span aria-hidden="true"><LockKeyhole size={20} /></span><h2>{title}</h2></header>
         {!session.configured && <p>Ứng dụng chưa được cấu hình UID của tài khoản quản trị.</p>}
-        {session.configured && !session.user && !showEmailForm && <p>Sau khi cấp quyền một lần, bạn có thể mở trang quản trị trực tiếp trên trình duyệt này.</p>}
+        {session.configured && !session.user && !showEmailForm && <p>Dùng thiết bị đã cấp quyền để xem và chỉnh sửa dữ liệu đào tạo.</p>}
 
         {!session.configured ? (
           <div className="admin-auth-setup">
@@ -173,8 +170,7 @@ export function AdminAuthGate({ children }: AdminAuthGateProps) {
             <button className="admin-auth-option" type="button" disabled={busy !== null} onClick={showEmailSignIn}>Dùng tài khoản quản trị</button>
           </div>
         )}
-        <a className="admin-auth-home" href="/">← Về trang tạo phiếu</a>
-      </section>
-    </main>
-  )
+      </section>}
+    </AdminDashboardLayout>
+  </div>
 }

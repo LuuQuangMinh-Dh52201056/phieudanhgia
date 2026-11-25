@@ -1,21 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toCanvas } from 'html-to-image'
-import { Activity, ArrowDownToLine, ArrowRight, CalendarDays, CarFront, Check, ChevronRight, ClipboardList, Download, Eye, FileText, LayoutDashboard, LoaderCircle, Pencil, RefreshCw, Search, SlidersHorizontal, Trash2, Users, X } from 'lucide-react'
+import { Activity, ArrowDownToLine, ArrowRight, Check, ChevronRight, ClipboardList, Download, Eye, LoaderCircle, Pencil, RefreshCw, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
+import { AdminDashboardLayout, AdminDashboardStats, type AdminView } from '../components/AdminDashboardLayout'
 import { AdminEvaluationEditDialog } from '../components/AdminEvaluationEditDialog'
 import { AdminTrainingDirectory } from '../components/AdminTrainingDirectory'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { ChecklistReport } from '../components/ChecklistReport'
 import { EvaluationReport } from '../components/EvaluationReport'
 import { ReportImageDialog, type ReportImage } from '../components/ReportImageDialog'
-import { PHU_GIAO_LOGO_DATA_URL, TrainingCenterBrand } from '../components/TrainingCenterBrand'
+import { PHU_GIAO_LOGO_DATA_URL } from '../components/TrainingCenterBrand'
 import { createEmergencyEvaluation, createLessonEvaluations } from '../data/lessonConfigs'
 import { deleteEvaluationAdminRecord, subscribeEvaluationAdminRecords, updateEvaluationAdminRecord, type EvaluationAdminRecord } from '../services/evaluationAdminStore'
 import type { EvaluationState, LessonEvaluation, TrainingType, VehicleCategory } from '../types/evaluation'
 import { CONCLUSION_META, STATUS_META, generateFileName, getTodayInputValue } from '../utils/evaluation'
 import { canvasToPngBlob, describeExportError, getExportPixelRatios, getPhotoDevice } from '../utils/reportExport'
-import '../styles/admin-teachers.css'
 
-type AdminView = 'overview' | 'records' | 'directory'
 type RecordView = 'records' | 'teachers'
 type UnknownObject = Record<string, unknown>
 const TRAINING_LABELS: Record<string, string> = { BASIC: 'Tập cơ bản', EXAM: 'Sa hình', COURSE: 'Sa hình', ROAD: 'Đường trường' }
@@ -357,32 +356,23 @@ export default function AdminTeachersPage() {
     </tr>)}</tbody>
   </table></div>
 
+  const stats = loading && !records.length ? {} : { records: records.length, teachers: totalTeachers, students: totalStudents, today: totalToday }
+
   return (
     <div className="admin-dashboard">
-      <aside className="admin-sidebar">
-        <a href="/" className="admin-sidebar-brand" aria-label="Phú Giáo — về trang tạo phiếu"><TrainingCenterBrand compact /></a>
-        <span className="admin-sidebar-caption">KHÔNG GIAN QUẢN TRỊ</span>
-        <nav aria-label="Điều hướng quản trị">
-          {([{ id: 'overview', label: 'Tổng quan', icon: LayoutDashboard }, { id: 'records', label: 'Phiếu đánh giá', icon: ClipboardList }, { id: 'directory', label: 'Giáo viên & xe', icon: Users }] as const).map((item) => <button key={item.id} type="button" aria-current={view === item.id ? 'page' : undefined} onClick={() => setView(item.id)}><item.icon size={20} /><span>{item.label}</span>{view === item.id && <ChevronRight size={15} />}</button>)}
-        </nav>
-        <div className="admin-sidebar-footer"><span className="admin-sidebar-seal"><Check size={21} /></span><strong>Đồng hành cùng<br />từng tay lái.</strong><p>Trung tâm Giáo dục nghề nghiệp Phú Giáo</p><a href="/">Tạo phiếu mới <ArrowRight size={15} /></a></div>
-      </aside>
-
-      <main className="admin-main">
-        <header className="admin-topbar"><div><span>Phú Giáo</span><ChevronRight size={14} /><strong>{view === 'overview' ? 'Tổng quan' : view === 'records' ? 'Phiếu đánh giá' : 'Giáo viên & xe'}</strong></div><span className={`admin-live ${recordsError ? 'has-error' : ''}`}><i />{loading ? 'Đang đồng bộ' : recordsError ? 'Kết nối gián đoạn' : 'Cập nhật trực tiếp'}</span></header>
-        <div className="admin-workspace">
-          <section className="admin-page-heading">
-            <div><span className="admin-eyebrow">QUẢN LÝ ĐÀO TẠO</span><h1>{view === 'overview' ? 'Chào một ngày hiệu quả.' : view === 'records' ? 'Mỗi buổi học, một bước tiến.' : 'Đội ngũ vững. Hành trình tốt.'}</h1><p>{view === 'overview' ? 'Theo dõi hoạt động đánh giá và kết nối mọi thông tin đào tạo tại một nơi.' : view === 'records' ? 'Tìm kiếm, xem lại và quản lý phiếu đánh giá của trung tâm.' : 'Quản lý giáo viên cùng phương tiện đào tạo theo từng hạng xe.'}</p></div>
-            {view !== 'directory' && <div className="admin-heading-actions"><button type="button" className="admin-button" disabled={loading} onClick={refresh}><RefreshCw size={16} className={loading ? 'admin-spin' : ''} />Làm mới</button><button type="button" className="admin-button is-primary" disabled={!filteredRecords.length} onClick={() => exportCsv(filteredRecords)}><ArrowDownToLine size={17} />Xuất CSV</button></div>}
-          </section>
+      <AdminDashboardLayout
+        view={view}
+        onViewChange={setView}
+        status={loading ? 'Đang đồng bộ' : recordsError ? 'Kết nối gián đoạn' : 'Cập nhật trực tiếp'}
+        statusAttention={Boolean(recordsError)}
+        headingActions={view !== 'directory' && <div className="admin-heading-actions"><button type="button" className="admin-button" disabled={loading} onClick={refresh}><RefreshCw size={16} className={loading ? 'admin-spin' : ''} />Làm mới</button><button type="button" className="admin-button is-primary" disabled={!filteredRecords.length} onClick={() => exportCsv(filteredRecords)}><ArrowDownToLine size={17} />Xuất CSV</button></div>}
+      >
           {message && <div className="admin-notice is-success" role="status"><Check size={18} /><span>{message}</span><button type="button" aria-label="Đóng thông báo" onClick={() => setMessage('')}><X size={16} /></button></div>}
           {recordsError && view !== 'directory' && <div className="admin-notice is-error" role="alert"><span>{recordsError}</span><button type="button" onClick={refresh}>Thử lại</button></div>}
           {exportError && <div className="admin-notice is-error" role="alert"><span>{exportError}</span><button type="button" aria-label="Đóng lỗi xuất ảnh" onClick={() => setExportError('')}><X size={16} /></button></div>}
 
           {view === 'directory' ? <AdminTrainingDirectory /> : <>
-            <section className="admin-stats" aria-label="Thống kê đánh giá">
-              {([{ label: 'Tổng phiếu đánh giá', value: records.length, icon: FileText, note: 'Đã lưu tại trung tâm' }, { label: 'Giáo viên', value: totalTeachers, icon: Users, note: 'Đã thực hiện đánh giá' }, { label: 'Học viên', value: totalStudents, icon: CarFront, note: 'Theo tên trong phiếu' }, { label: 'Phiếu hôm nay', value: totalToday, icon: CalendarDays, note: dateLabel(getTodayInputValue()) }]).map((stat) => <article key={stat.label}><div className="admin-stat-top"><span>{stat.label}</span><i><stat.icon size={19} /></i></div><strong>{loading && !records.length ? '—' : stat.value.toLocaleString('vi-VN')}</strong><small>{stat.note}</small></article>)}
-            </section>
+            <AdminDashboardStats {...stats} todayLabel={dateLabel(getTodayInputValue())} />
 
             {view === 'overview' && <section className="admin-overview-grid">
               <div className="admin-card admin-overview-recent"><div className="admin-card-heading"><div><span className="admin-eyebrow">HOẠT ĐỘNG GẦN ĐÂY</span><h2>Những phiếu mới nhất</h2></div><button type="button" className="admin-text-button" onClick={() => setView('records')}>Xem tất cả <ArrowRight size={16} /></button></div>{latestRecords.length ? recordTable(latestRecords) : <div className="admin-empty"><ClipboardList size={32} /><h3>{loading ? 'Đang tải phiếu đánh giá' : 'Chưa có phiếu đánh giá'}</h3><p>Những buổi học đã đánh giá sẽ xuất hiện tại đây.</p></div>}</div>
@@ -407,9 +397,7 @@ export default function AdminTeachersPage() {
               </section>
             </>}
           </>}
-          <footer className="admin-workspace-footer"><span>PHÚ GIÁO</span><p>Chất lượng từ những điều tận tâm.</p><span>Quản lý đào tạo</span></footer>
-        </div>
-      </main>
+      </AdminDashboardLayout>
 
       {selectedTeacher && !selectedRecord && <div className="admin-modal-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedTeacherKey('') }}><section className="admin-detail-modal" role="dialog" aria-modal="true" aria-label={`Phiếu của giáo viên ${selectedTeacher.name}`}><header><div><span className="admin-eyebrow">GIÁO VIÊN HƯỚNG DẪN</span><h2>{selectedTeacher.name}</h2><p>{selectedTeacher.records.length} phiếu · {selectedTeacher.students} học viên trong kết quả lọc</p></div><button type="button" className="admin-icon-button" aria-label="Đóng danh sách giáo viên" onClick={() => setSelectedTeacherKey('')}><X size={21} /></button></header>{recordTable(selectedTeacher.records)}</section></div>}
       {selectedRecord && <div className="admin-modal-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedRecordId('') }}><section className="admin-detail-modal" role="dialog" aria-modal="true" aria-label={`Chi tiết phiếu của học viên ${selectedRecord.studentName}`}>

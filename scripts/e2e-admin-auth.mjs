@@ -9,9 +9,10 @@ async function contextWithSession(browser, offlineContext, initialSession) {
   return context
 }
 
-async function assertAdminHidden(page, assert, label) {
+async function assertPrivateAdminHidden(page, assert, label) {
+  assert(await page.getByRole('navigation', { name: 'Điều hướng quản trị', exact: true }).isVisible(), `${label}: khung quản trị phải hiển thị`)
   assert(await page.getByRole('region', { name: 'Danh mục giáo viên và xe', exact: true }).count() === 0, `${label}: danh mục quản trị không được mount`)
-  assert(await page.getByRole('button', { name: 'Giáo viên & xe', exact: true }).count() === 0, `${label}: không được hiển thị điều hướng quản trị`)
+  assert(await page.getByRole('button', { name: 'Xuất CSV', exact: true }).count() === 0, `${label}: không được hiển thị thao tác dữ liệu`)
   await page.waitForFunction(() => window.__E2E_STORES__.snapshot().activeRecordSubscriptions === 0)
   const recordSubscriptions = await page.evaluate(() => window.__E2E_STORES__.snapshot().activeRecordSubscriptions)
   assert(recordSubscriptions === 0, `${label}: không được tiếp tục đọc phiếu riêng tư`)
@@ -23,9 +24,24 @@ export async function runAdminAuthScenarios({ browser, offlineContext, baseUrl, 
     const page = await context.newPage()
     await page.goto(new URL(adminPath, baseUrl).href)
     await page.getByRole('heading', { name: 'Truy cập quản trị', exact: true }).waitFor()
+    await page.getByRole('heading', { name: 'Chào một ngày hiệu quả.', exact: true }).waitFor()
+    const stats = page.getByRole('region', { name: 'Thống kê đánh giá', exact: true })
+    assert((await stats.locator('article > strong').allTextContents()).every((value) => value === '—'), 'Khung tổng quan chỉ hiện chỗ giữ số liệu khi chưa được cấp quyền')
+    await page.getByRole('button', { name: 'Phiếu đánh giá', exact: true }).click()
+    await page.getByRole('heading', { name: 'Mỗi buổi học, một bước tiến.', exact: true }).waitFor()
+    await assertPrivateAdminHidden(page, assert, 'Mở mục phiếu khi chưa có quyền')
+    await page.getByRole('button', { name: 'Giáo viên & xe', exact: true }).click()
+    await page.getByRole('heading', { name: 'Đội ngũ vững. Hành trình tốt.', exact: true }).waitFor()
+    await assertPrivateAdminHidden(page, assert, 'Mở danh mục khi chưa có quyền')
+    await page.getByRole('button', { name: 'Tổng quan', exact: true }).click()
+    await page.setViewportSize({ width: 320, height: 844 })
+    const width = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, content: document.documentElement.scrollWidth }))
+    assert(width.content <= width.viewport + 1, 'Khung quản trị chưa cấp quyền vừa màn hình 320px')
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.screenshot({ path: path.join(artifactDir, 'admin-overview-guest-mobile.png'), fullPage: true })
     await page.getByRole('button', { name: 'Dùng tài khoản quản trị', exact: true }).click()
     await page.getByRole('heading', { name: 'Đăng nhập quản trị', exact: true }).waitFor()
-    await assertAdminHidden(page, assert, 'Chưa đăng nhập')
+    await assertPrivateAdminHidden(page, assert, 'Chưa đăng nhập')
     await page.screenshot({ path: path.join(artifactDir, 'admin-login-mobile.png'), fullPage: true })
     await page.setViewportSize({ width: 1440, height: 1000 })
     await page.screenshot({ path: path.join(artifactDir, 'admin-login-desktop.png'), fullPage: true })
@@ -45,14 +61,14 @@ export async function runAdminAuthScenarios({ browser, offlineContext, baseUrl, 
     await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click()
     await page.getByRole('alert').filter({ hasText: 'Email hoặc mật khẩu không đúng' }).waitFor()
     assert(await page.getByLabel('Mật khẩu', { exact: true }).inputValue() === '', 'Đăng nhập lỗi phải xóa giá trị mật khẩu')
-    await assertAdminHidden(page, assert, 'Sai thông tin đăng nhập')
+    await assertPrivateAdminHidden(page, assert, 'Sai thông tin đăng nhập')
 
     await page.evaluate(() => window.__E2E_AUTH__.configureSignIn({ outcome: 'denied' }))
     await page.getByLabel('Mật khẩu', { exact: true }).fill('test-only-password')
     await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click()
     await page.getByRole('alert').filter({ hasText: 'không có quyền quản trị' }).waitFor()
     assert((await page.evaluate(() => window.__E2E_AUTH__.snapshot())).user === null, 'UID chưa cấp quyền phải được đưa về phiên đã đăng xuất')
-    await assertAdminHidden(page, assert, 'UID chưa cấp quyền')
+    await assertPrivateAdminHidden(page, assert, 'UID chưa cấp quyền')
 
     await page.evaluate(() => {
       window.__E2E_AUTH__.configureSignIn({ outcome: 'authorized' })
@@ -61,7 +77,7 @@ export async function runAdminAuthScenarios({ browser, offlineContext, baseUrl, 
     await page.getByLabel('Mật khẩu', { exact: true }).fill('test-only-password')
     await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click()
     await page.getByRole('button', { name: 'Đang đăng nhập...', exact: true }).waitFor()
-    await assertAdminHidden(page, assert, 'Đang xác thực')
+    await assertPrivateAdminHidden(page, assert, 'Đang xác thực')
     await page.evaluate(() => window.__E2E_AUTH__.releaseSignIn())
     await page.getByRole('region', { name: 'Phiên quản trị', exact: true }).waitFor()
     await page.getByRole('button', { name: 'Giáo viên & xe', exact: true }).click()
@@ -74,7 +90,7 @@ export async function runAdminAuthScenarios({ browser, offlineContext, baseUrl, 
 
     await page.getByRole('button', { name: 'Đăng xuất', exact: true }).click()
     await page.getByRole('heading', { name: 'Đăng nhập quản trị', exact: true }).waitFor()
-    await assertAdminHidden(page, assert, 'Sau đăng xuất')
+    await assertPrivateAdminHidden(page, assert, 'Sau đăng xuất')
     assert(await page.getByText('Giáo viên phiên đăng nhập', { exact: true }).count() === 0, 'Đăng xuất phải gỡ thông tin quản trị cũ khỏi DOM')
 
     await page.evaluate(() => window.__E2E_AUTH__.setSession({
@@ -84,7 +100,7 @@ export async function runAdminAuthScenarios({ browser, offlineContext, baseUrl, 
     }))
     await page.getByText('unapproved@example.invalid', { exact: true }).waitFor()
     await page.getByRole('alert').filter({ hasText: 'không có quyền quản trị' }).waitFor()
-    await assertAdminHidden(page, assert, 'Phiên UID khác')
+    await assertPrivateAdminHidden(page, assert, 'Phiên UID khác')
     await page.getByRole('button', { name: 'Đăng xuất', exact: true }).click()
     await page.getByLabel('Email quản trị', { exact: true }).waitFor()
   } finally {
@@ -98,7 +114,7 @@ export async function runAdminAuthScenarios({ browser, offlineContext, baseUrl, 
     await page.getByRole('heading', { name: 'Thiết lập tài khoản quản trị', exact: true }).waitFor()
     assert((await page.locator('body').innerText()).includes('VITE_FIREBASE_ADMIN_UIDS'), 'Thiếu cấu hình phải hướng dẫn khai báo UID quản trị')
     assert(await page.getByLabel('Email quản trị', { exact: true }).count() === 0, 'Chưa cấu hình UID không được hiển thị form đăng nhập gây nhầm lẫn')
-    await assertAdminHidden(page, assert, 'Chưa cấu hình quản trị')
+    await assertPrivateAdminHidden(page, assert, 'Chưa cấu hình quản trị')
     await page.screenshot({ path: path.join(artifactDir, 'admin-auth-setup-mobile.png'), fullPage: true })
   } finally {
     await unconfigured.close()
@@ -109,7 +125,7 @@ export async function runAdminAuthScenarios({ browser, offlineContext, baseUrl, 
     const page = await loading.newPage()
     await page.goto(new URL(adminPath, baseUrl).href)
     await page.getByRole('status').filter({ hasText: 'Đang kiểm tra phiên đăng nhập' }).waitFor()
-    await assertAdminHidden(page, assert, 'Chờ khôi phục phiên')
+    await assertPrivateAdminHidden(page, assert, 'Chờ khôi phục phiên')
     await page.evaluate(() => window.__E2E_AUTH__.setSession({ loading: false }))
     await page.getByRole('heading', { name: 'Truy cập quản trị', exact: true }).waitFor()
   } finally {
@@ -129,7 +145,7 @@ export async function runAdminAuthScenarios({ browser, offlineContext, baseUrl, 
     const deviceCode = page.getByTestId('admin-device-uid')
     const uid = await deviceCode.innerText()
     assert(uid === 'e2e-device-uid', 'Màn cấp quyền phải hiện UID của trình duyệt')
-    await assertAdminHidden(page, assert, 'Thiết bị chưa được cấp quyền')
+    await assertPrivateAdminHidden(page, assert, 'Thiết bị chưa được cấp quyền')
     await page.screenshot({ path: path.join(artifactDir, 'admin-device-pending-mobile.png'), fullPage: true })
     await page.reload()
     await deviceCode.waitFor()
@@ -142,7 +158,7 @@ export async function runAdminAuthScenarios({ browser, offlineContext, baseUrl, 
     assert(state.loginCalls.length === 0 && state.deviceCalls === 0 && state.user.uid === uid, 'Thiết bị đã được duyệt vào thẳng với phiên lưu')
     await page.getByRole('button', { name: 'Thoát trên thiết bị này', exact: true }).click()
     await start.waitFor()
-    await assertAdminHidden(page, assert, 'Sau khi thoát trên thiết bị')
+    await assertPrivateAdminHidden(page, assert, 'Sau khi thoát trên thiết bị')
   } finally {
     await device.close()
   }
