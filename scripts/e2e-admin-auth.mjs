@@ -22,6 +22,8 @@ export async function runAdminAuthScenarios({ browser, offlineContext, baseUrl, 
   try {
     const page = await context.newPage()
     await page.goto(new URL(adminPath, baseUrl).href)
+    await page.getByRole('heading', { name: 'Truy cập quản trị', exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Dùng tài khoản quản trị', exact: true }).click()
     await page.getByRole('heading', { name: 'Đăng nhập quản trị', exact: true }).waitFor()
     await assertAdminHidden(page, assert, 'Chưa đăng nhập')
     await page.screenshot({ path: path.join(artifactDir, 'admin-login-mobile.png'), fullPage: true })
@@ -109,8 +111,39 @@ export async function runAdminAuthScenarios({ browser, offlineContext, baseUrl, 
     await page.getByRole('status').filter({ hasText: 'Đang kiểm tra phiên đăng nhập' }).waitFor()
     await assertAdminHidden(page, assert, 'Chờ khôi phục phiên')
     await page.evaluate(() => window.__E2E_AUTH__.setSession({ loading: false }))
-    await page.getByRole('heading', { name: 'Đăng nhập quản trị', exact: true }).waitFor()
+    await page.getByRole('heading', { name: 'Truy cập quản trị', exact: true }).waitFor()
   } finally {
     await loading.close()
+  }
+
+  const device = await contextWithSession(browser, offlineContext, signedOut)
+  try {
+    const page = await device.newPage()
+    const url = new URL(adminPath, baseUrl).href
+    await page.goto(url)
+    const start = page.getByRole('button', { name: 'Dùng thiết bị này', exact: true })
+    await start.waitFor()
+    assert((await page.evaluate(() => window.__E2E_AUTH__.snapshot())).deviceCalls === 0, 'Chỉ tạo mã sau khi người dùng chọn thiết bị')
+    await start.click()
+    await page.getByRole('heading', { name: 'Thiết bị chờ cấp quyền', exact: true }).waitFor()
+    const deviceCode = page.getByTestId('admin-device-uid')
+    const uid = await deviceCode.innerText()
+    assert(uid === 'e2e-device-uid', 'Màn cấp quyền phải hiện UID của trình duyệt')
+    await assertAdminHidden(page, assert, 'Thiết bị chưa được cấp quyền')
+    await page.screenshot({ path: path.join(artifactDir, 'admin-device-pending-mobile.png'), fullPage: true })
+    await page.reload()
+    await deviceCode.waitFor()
+    assert(await deviceCode.innerText() === uid, 'Tải lại trang giữ cùng mã thiết bị')
+    await page.evaluate(() => window.__E2E_AUTH__.approveDevice())
+    await page.getByText('Thiết bị đã cấp quyền', { exact: true }).waitFor()
+    await page.reload()
+    await page.getByRole('region', { name: 'Phiên quản trị', exact: true }).waitFor()
+    const state = await page.evaluate(() => window.__E2E_AUTH__.snapshot())
+    assert(state.loginCalls.length === 0 && state.deviceCalls === 0 && state.user.uid === uid, 'Thiết bị đã được duyệt vào thẳng với phiên lưu')
+    await page.getByRole('button', { name: 'Thoát trên thiết bị này', exact: true }).click()
+    await start.waitFor()
+    await assertAdminHidden(page, assert, 'Sau khi thoát trên thiết bị')
+  } finally {
+    await device.close()
   }
 }

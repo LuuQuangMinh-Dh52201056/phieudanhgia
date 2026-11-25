@@ -1,5 +1,8 @@
 const copy = (value) => structuredClone(value)
 const listeners = new Set()
+const deviceKey = '__E2E_ADMIN_DEVICE__'
+const deviceApprovalKey = '__E2E_ADMIN_DEVICE_APPROVED__'
+const savedDevice = localStorage.getItem(deviceKey)
 let session = {
   loading: false,
   configured: true,
@@ -7,11 +10,16 @@ let session = {
   isAuthorized: true,
   error: '',
   ...(globalThis.__E2E_AUTH_INITIAL__ ?? {}),
+  ...(savedDevice ? {
+    user: { uid: savedDevice, email: null, isAnonymous: true },
+    isAuthorized: localStorage.getItem(deviceApprovalKey) === savedDevice,
+  } : {}),
 }
 let signInOptions = { outcome: 'authorized' }
 let heldSignIn = null
 const loginCalls = []
 let signOutCalls = 0
+let deviceCalls = 0
 
 function emit(updates) {
   session = { ...session, ...copy(updates) }
@@ -41,12 +49,24 @@ export async function signInAdmin(email, password) {
 
 export async function signOutAdmin() {
   signOutCalls += 1
+  localStorage.removeItem(deviceKey)
   emit({ loading: false, user: null, isAuthorized: false, error: '' })
 }
 
+export async function startAdminDevice() {
+  deviceCalls += 1
+  const uid = 'e2e-device-uid'
+  localStorage.setItem(deviceKey, uid)
+  emit({ user: { uid, email: null, isAnonymous: true }, isAuthorized: false, error: '' })
+}
+
 globalThis.__E2E_AUTH__ = {
-  snapshot: () => ({ ...copy(session), loginCalls: copy(loginCalls), signOutCalls }),
+  snapshot: () => ({ ...copy(session), loginCalls: copy(loginCalls), signOutCalls, deviceCalls }),
   setSession: emit,
+  approveDevice() {
+    localStorage.setItem(deviceApprovalKey, session.user.uid)
+    emit({ isAuthorized: true })
+  },
   configureSignIn(options) { signInOptions = { outcome: 'authorized', ...copy(options) } },
   holdSignIn() {
     let release

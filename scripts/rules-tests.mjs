@@ -22,6 +22,7 @@ const operations = await import(operationsUrl)
 const adminList = /let adminUids = \[[^\n]*\];/
 assert.ok(adminList.test(source), 'The rules must contain the explicit admin UID list.')
 const adminUid = 'rules-test-admin'
+const approvedDeviceUid = 'rules-test-approved-device'
 const now = () => serverTimestamp()
 const old = Timestamp.fromDate(new Date('2024-01-01T00:00:00Z'))
 const teacher = () => ({ name: 'Nguyễn Văn An', normalizedName: 'nguyen van an', createdAt: now(), updatedAt: now() })
@@ -67,12 +68,15 @@ try {
   await env.cleanup()
 }
 
-env = await environment(`['${adminUid}']`)
+env = await environment(`['${adminUid}', '${approvedDeviceUid}']`)
 try {
   await env.clearFirestore()
   const admin = env.authenticatedContext(adminUid).firestore()
   const anonymous = env.unauthenticatedContext().firestore()
   const other = env.authenticatedContext('ordinary-account', { admin: true }).firestore()
+  const deviceToken = { firebase: { sign_in_provider: 'anonymous' } }
+  const approvedDevice = env.authenticatedContext(approvedDeviceUid, deviceToken).firestore()
+  const unapprovedDevice = env.authenticatedContext('rules-test-unapproved-device', deviceToken).firestore()
   await env.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore()
     await setDoc(doc(db, 'trainingTeachers', 'existing'), { ...teacher(), createdAt: old, updatedAt: old })
@@ -82,7 +86,7 @@ try {
     await setDoc(doc(db, 'trainingVehicles', 'legacy'), { plateNumber: '61A-123.45', vehicleCategory: 'B_MANUAL', source: 'original' })
   })
 
-  for (const [label, db] of [['anonymous', anonymous], ['non-admin with an admin claim', other]]) {
+  for (const [label, db] of [['anonymous', anonymous], ['non-admin with an admin claim', other], ['unapproved device', unapprovedDevice]]) {
     await check(`${label} can read both public catalogs`, async () => {
       for (const name of ['trainingTeachers', 'trainingVehicles']) {
         await allow(getDoc(doc(db, name, 'existing')))
@@ -103,6 +107,14 @@ try {
       await deny(updateDoc(doc(db, 'evaluations', 'legacy'), evaluationEdit()))
     })
   }
+
+  await check('approved device UID can administer private evaluations', async () => {
+    const reference = doc(approvedDevice, 'evaluations', 'device-check')
+    await allow(setDoc(reference, evaluation()))
+    await allow(getDoc(reference))
+    await allow(updateDoc(reference, { ...evaluationEdit(), updatedBy: approvedDeviceUid }))
+    await allow(deleteDoc(reference))
+  })
 
   await check('admin can create/read/update/delete a teacher', async () => {
     const reference = doc(admin, 'trainingTeachers', 'admin-teacher')

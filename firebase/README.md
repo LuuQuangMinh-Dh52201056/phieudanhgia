@@ -24,7 +24,16 @@ Rules mới **đóng quyền đọc/xóa phiếu công khai**. Các phiếu cũ,
 6. Vào **Firestore Database → Rules**, dán **toàn bộ** nội dung `firestore.rules` đã điền UID, kiểm tra rồi nhấn **Publish**. Không dán riêng đoạn danh mục hoặc thêm một `allow read, write: if true` khác: các điều kiện cho phép trùng đường dẫn được kết hợp, nên một đoạn công khai có thể mở lại dữ liệu.
 7. Tải lại website và đăng nhập quản trị. Dùng dữ liệu thử để kiểm tra sửa, xóa phiếu, giáo viên và xe. Mở cửa sổ riêng tư để kiểm tra luồng lập và lưu phiếu của giáo viên.
 
-Danh sách UID ở giao diện chỉ điều khiển màn hình. Quyền đọc/ghi thực tế do Firestore Rules xác thực UID của Firebase Authentication quyết định. Không bỏ đăng nhập hoặc mở quyền ghi công khai để xử lý lỗi thiếu quyền.
+Danh sách UID ở giao diện điều khiển màn hình. Firestore Rules kiểm tra UID do Firebase Authentication xác thực trước khi cho đọc hoặc ghi.
+
+## Truy cập quản trị bằng thiết bị
+
+1. Kiểm tra Rules hiện tại đã giới hạn đọc, sửa và xóa phiếu theo `adminUids`. Bật **Anonymous** trong Firebase **Authentication → Sign-in method**.
+2. Trên trình duyệt riêng sẽ dùng để quản trị, mở trang quản trị và chọn **Dùng thiết bị này**. Sao chép mã thiết bị được tạo.
+3. Thêm mã vào `adminUids` trong `firestore.rules` và đồng bộ danh sách UID trong `render.yaml` cùng biến Render `VITE_FIREBASE_ADMIN_UIDS` nếu đang đặt trực tiếp. Publish Rules và triển khai lại web.
+4. Mở lại trang quản trị trên chính trình duyệt đã tạo mã. Firebase nhận diện thiết bị từ phiên lưu trên trình duyệt. Xóa dữ liệu trang web hoặc chọn **Thoát trên thiết bị này** sẽ cần cấp lại mã.
+
+Để thu hồi quyền từ xa, bỏ UID của thiết bị trong Rules và cấu hình web, Publish Rules rồi triển khai lại. Mỗi hồ sơ trình duyệt có một UID. Với dự án bật tự dọn tài khoản Anonymous, Firebase có thể xóa UID sau 30 ngày. [Firebase Anonymous Authentication](https://firebase.google.com/docs/auth/web/anonymous-auth).
 
 ## Publish bằng CLI nếu bạn tự chọn
 

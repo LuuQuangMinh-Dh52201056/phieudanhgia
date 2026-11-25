@@ -1,6 +1,7 @@
 export interface AdminUser {
   uid: string
   email: string | null
+  isAnonymous: boolean
 }
 
 export interface AdminSession {

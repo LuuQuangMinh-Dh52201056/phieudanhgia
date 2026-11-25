@@ -1,8 +1,10 @@
 import {
+  browserLocalPersistence,
   browserSessionPersistence,
   inMemoryPersistence,
   onAuthStateChanged,
   setPersistence,
+  signInAnonymously,
   signInWithEmailAndPassword,
   signOut,
 } from 'firebase/auth'
@@ -59,9 +61,9 @@ export function subscribeAdminSession(onState: (state: AdminSession) => void): (
       emit({
         loading: false,
         configured: true,
-        user: user ? { uid: user.uid, email: user.email } : null,
+        user: user ? { uid: user.uid, email: user.email, isAnonymous: user.isAnonymous } : null,
         isAuthorized,
-        error: user && !isAuthorized ? 'Tài khoản này không có quyền quản trị danh mục. Vui lòng đăng xuất và dùng tài khoản được cấp quyền.' : '',
+        error: user && !user.isAnonymous && !isAuthorized ? 'Tài khoản này không có quyền quản trị danh mục. Vui lòng đăng xuất và dùng tài khoản được cấp quyền.' : '',
       })
     },
     (error) => emit({
@@ -108,6 +110,22 @@ export async function signInAdmin(email: string, password: string): Promise<void
       throw new BackendOperationError('Tài khoản này không có quyền quản trị. Vui lòng dùng tài khoản được cấp quyền.', 'admin/permission-denied')
     }
   } catch (error) {
+    throw translateAuthError(error)
+  }
+}
+
+export async function startAdminDevice(): Promise<void> {
+  try {
+    await setPersistence(firebaseAuth, browserLocalPersistence)
+    await signInAnonymously(firebaseAuth)
+  } catch (error) {
+    const code = getBackendErrorCode(error)
+    if (code === 'auth/operation-not-allowed' || code === 'auth/admin-restricted-operation') {
+      throw new BackendOperationError('Firebase chưa bật Anonymous. Mở Firebase Console → Authentication → Sign-in method để bật phương thức này.', code, error)
+    }
+    if (code === 'auth/web-storage-unsupported' || code === 'auth/unsupported-persistence-type' || code === 'auth/operation-not-supported-in-this-environment') {
+      throw new BackendOperationError('Trình duyệt chưa lưu được phiên thiết bị. Hãy mở trang bằng trình duyệt thường và cho phép lưu dữ liệu trang web.', code, error)
+    }
     throw translateAuthError(error)
   }
 }

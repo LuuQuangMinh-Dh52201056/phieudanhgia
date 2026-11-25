@@ -32,7 +32,20 @@
 .admin-auth-page button:disabled, .admin-auth-toolbar button:disabled { opacity: .5; cursor: wait; }
 .admin-auth-page button:focus-visible, .admin-auth-toolbar button:focus-visible, .admin-auth-page a:focus-visible { outline: 3px solid #abcaa0; outline-offset: 3px; }
 .admin-auth-page button.admin-auth-submit { width: 100%; min-height: 47px; margin-top: 5px; }
-.admin-auth-form-note { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 8px; color: #a6b29b; font-size: 10px; }
+.admin-auth-device { display: grid; gap: 12px; margin-top: 24px; }
+.admin-auth-device > p { margin: 0; color: #47624f; font-size: 13px; line-height: 1.65; }
+.admin-auth-device-code { display: grid; gap: 10px; padding: 14px; border: 1px solid #dce7db; border-radius: 10px; background: #fff; }
+.admin-auth-device-code code { color: #194a35; font-size: 13px; overflow-wrap: anywhere; user-select: all; }
+.admin-auth-page button.admin-auth-option, .admin-auth-page button.admin-auth-secondary {
+  min-height: 44px;
+  color: #126842;
+  background: transparent;
+}
+.admin-auth-page button.admin-auth-option { border-color: transparent; }
+.admin-auth-page button.admin-auth-secondary { justify-self: start; border-color: #dce7db; }
+.admin-auth-page button.admin-auth-option:hover:not(:disabled), .admin-auth-page button.admin-auth-secondary:hover:not(:disabled) { background: #e9f3ec; }
+.admin-auth-device > p.admin-auth-device-status { color: #126842; }
+.admin-auth-device > p.admin-auth-error { color: #903c33; }
 .admin-auth-error { margin: 3px 0; padding: 13px 15px; border: 1px solid #ecd9d1; border-radius: 8px; color: #b66c61; background: #fff8f3; font-size: 12px; line-height: 1.9; }
 .admin-auth-home { display: inline-block; margin-top: 29px; color: #95a68a; font-size: 11px; text-decoration: none; }
 .admin-auth-home:hover { color: #087a4b; }
@@ -72,7 +85,6 @@
   .admin-auth-card > p { font-size: 13px; }
   .admin-auth-form input { min-height: 49px; font-size: 16px; }
   .admin-auth-form label { font-size: 13px; }
-  .admin-auth-form-note { font-size: 10px; }
   .admin-auth-toolbar { justify-content: space-between; gap: 10px; padding: 10px 18px; }
   .admin-auth-toolbar > div { max-width: calc(100% - 90px); font-size: 10px; }
   .admin-auth-toolbar > div > span { display: none; }
